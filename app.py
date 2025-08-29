@@ -181,7 +181,7 @@ if not API_KEY:
 
 with st.sidebar:
     st.header("설정")
-    keyword = st.text_input("검색어", "야구 하이라이트")
+    keyword = st.text_input("검색어", "")
     max_pages = st.radio("검색 페이지 수(쿼터 절약)", options=[1,2], index=0)
     st.caption("범위: 현재 시각(KST) 기준 **지난 48시간**")
     run_btn = st.button("검색 실행")
