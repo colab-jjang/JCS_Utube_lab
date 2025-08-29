@@ -12,13 +12,6 @@ KST = ZoneInfo("Asia/Seoul")
 PT  = ZoneInfo("America/Los_Angeles")
 DAILY_QUOTA = 10_000       # YouTube Data API 기본 일일 쿼터
 
-# 세션 상태에 쿼터 카운터 준비
-if "quota_used" not in st.session_state:
-    st.session_state["quota_used"] = load_quota_used()
-else:
-#날짜가 바뀌었을 수도 있으니 재동기화
-    st.session_state["quota_used"] = load_quota_used()
-
 # 쿼터 세션 누적시킴
 
 import json, os
@@ -170,6 +163,14 @@ def next_reset_info():
     remaining = reset_pt - now_pt
     reset_kst = reset_pt.astimezone(KST)
     return reset_pt, reset_kst, remaining
+
+# ====== 쿼터 카운트 ======
+# 세션 상태에 쿼터 카운터 준비
+if "quota_used" not in st.session_state:
+    st.session_state["quota_used"] = load_quota_used()
+else:
+#날짜가 바뀌었을 수도 있으니 재동기화
+    st.session_state["quota_used"] = load_quota_used()
 
 # ====== UI ======
 st.set_page_config(page_title="YouTube Shorts 48h Finder", page_icon="📺", layout="wide")
