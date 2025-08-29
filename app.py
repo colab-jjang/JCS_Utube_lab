@@ -14,7 +14,10 @@ DAILY_QUOTA = 10_000       # YouTube Data API 기본 일일 쿼터
 
 # 세션 상태에 쿼터 카운터 준비
 if "quota_used" not in st.session_state:
-    st.session_state["quota_used"] = 0
+    st.session_state["quota_used"] = load_quota_used()
+else:
+#날짜가 바뀌었을 수도 있으니 재동기화
+    st.session_state["quota_used"] = load_quota_used()
 
 # 쿼터 세션 누적시킴
 
@@ -88,7 +91,8 @@ def fmt_hms(seconds):
 # ====== API helper (쿼터 카운트 포함) ======
 def api_get(url, params, cost):
     r = requests.get(url, params=params, timeout=20)
-    st.session_state["quota_used"] += cost  # 성공/실패와 무관히 카운트
+    # 성공/실패와 무관, 유효/무효 요청 모두 비용 발생 -> 문서 규정
+    add_quota(cost)
     r.raise_for_status()
     return r.json()
 
