@@ -16,6 +16,45 @@ DAILY_QUOTA = 10_000       # YouTube Data API 기본 일일 쿼터
 if "quota_used" not in st.session_state:
     st.session_state["quota_used"] = 0
 
+# 쿼터 세션 누적시킴
+
+import json, os
+from pathlib import Path
+
+DATA_DIR = Path(".")
+QUOTA_FILE = DATA_DIR / "quota_usage.json"   # 앱 폴더에 저장 (앱이 살아있는 한 유지)
+
+def _today_pt_str():
+    from zoneinfo import ZoneInfo
+    PT = ZoneInfo("America/Los_Angeles")
+    now_pt = dt.datetime.now(PT)
+    return now_pt.strftime("%Y-%m-%d")
+
+def load_quota_used():
+    """파일에서 오늘(PT) 사용량을 읽어온다. 날짜 다르면 0으로 리셋."""
+    today = _today_pt_str()
+    if QUOTA_FILE.exists():
+        try:
+            data = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
+            if data.get("pt_date") == today:
+                return int(data.get("used", 0))
+        except Exception:
+            pass
+    return 0
+
+def save_quota_used(value):
+    """오늘(PT) 사용량을 파일에 저장."""
+    data = {"pt_date": _today_pt_str(), "used": int(value)}
+    QUOTA_FILE.write_text(json.dumps(data), encoding="utf-8")
+
+def add_quota(cost):
+    """쿼터를 누적(파일+세션 모두)"""
+    # 세션(화면 표시용)
+    st.session_state["quota_used"] = st.session_state.get("quota_used", 0) + int(cost)
+    # 파일(영구 누적)
+    current_file_val = load_quota_used()
+    save_quota_used(current_file_val + int(cost))
+
 # ====== Time window (마지막 48시간, KST 기준) ======
 def kst_window_last_48h():
     now_kst = dt.datetime.now(KST)
