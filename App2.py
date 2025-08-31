@@ -360,10 +360,9 @@ if run:
 
 with st.spinner("데이터 수집/분석 중…"):
     df = fetch_shorts_df(pages=pages)
-    base_col = "views_per_hour" 
         
     if rank_mode.startswith("상승속도"):
-    base_col = "views_per_hour"
+        base_col = "views_per_hour"
     else:
         base_col = "view_count"
 
