@@ -236,8 +236,27 @@ with st.spinner("데이터 수집/분석 중…"):
     yt_kw_words = [w for w,_ in yt_kw]
     # 구글 트렌드
     g_kw = google_trends_top()
-    # 교집합
-    hot_intersection = [w for w in yt_kw_words if any(w in g for g in g_kw)]
+
+# --- improved intersection (bidirectional partial match, normalized) ---
+def _norm(s: str) -> str:
+    s = s.lower().strip()
+    s = re.sub(r"\s+", "", s)             # 공백 제거
+    s = re.sub(r"[^\w가-힣]", "", s)       # 특수문자 제거
+    return s
+
+yt_norm = [_norm(w) for w in yt_kw_words]
+g_norm  = [_norm(g) for g in g_kw]
+
+hot = []
+for raw_y, y in zip(yt_kw_words, yt_norm):
+    for g in g_norm:
+        if y and g and (y in g or g in y):  # 양방향 부분일치
+            hot.append(raw_y)               # 원래 표기를 유지
+            break
+
+# 순서 보존하며 중복 제거
+_seen = set()
+hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
 
 # ───────── 쿼터/리셋 정보 ─────────
 now_pt = dt.datetime.now(PT)
