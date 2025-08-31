@@ -172,12 +172,53 @@ STOPWORDS = set("""
 합니다 했다 했다가 하는 하고 하며 하면 대한 위해 에서 에게 에도 에는 으로 로 를 은 는 이 가 도 의 에 와 과
 """.split())
 STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브"}
+# 정치·뉴스에서 의미 없는 일반어/플랫폼/도메인 토큰 제거
+STOPWORDS |= {"http","https","www","com","co","kr","net","org",
+              "youtu","youtube","be","shorts","watch","tv",
+              "news","live","breaking","official","channel",
+              "video","clip"}
 
-def tokenize_ko_en(text:str):
-    text = re.sub(r"[^0-9A-Za-z가-힣]+", " ", str(text))
-    toks = [t.strip().lower() for t in text.split() if t.strip()]
-    toks = [t for t in toks if len(t)>=2 and t not in STOPWORDS]
-    return toks
+
+def tokenize_ko_en(text: str):
+    text = str(text or "")
+
+    # 1) URL/이메일/해시태그/멘션 제거 또는 평문화
+    text = re.sub(r"https?://\S+", " ", text)          # http/https 링크 삭제
+    text = re.sub(r"www\.\S+", " ", text)
+    text = re.sub(r"\S+@\S+", " ", text)               # 이메일
+    text = re.sub(r"#", " ", text)                     # #키워드 → 키워드로만 남기기
+    text = re.sub(r"[@_/\\]", " ", text)               # @, _, /, \ 등은 공백으로
+
+    # 2) 토큰 후보 추출 (숫자/영문/한글만)
+    raw = re.findall(r"[0-9A-Za-z가-힣]+", text.lower())
+
+    out = []
+    for t in raw:
+        if not t or t.isdigit():
+            continue
+
+        # 3) 도메인/플랫폼 일반어 필터
+        if t in STOPWORDS:
+            continue
+        if t in {"http","https","www","com","co","kr","net","org"}:
+            continue
+        if t in {"youtu","youtube","be","shorts","watch"}:
+            continue
+
+        # 4) '연합뉴스tv' → '연합뉴스' 같이 tv 접미사 정리
+        if t.endswith("tv") and len(t) > 2:
+            t = t[:-2]
+
+        # 5) 순수 영문 토큰은 너무 짧으면 제거
+        if re.fullmatch(r"[a-z]+", t) and len(t) <= 2:
+            continue
+
+        # 6) 다시 한 번 불용어/길이 체크
+        if t in STOPWORDS or len(t) < 2:
+            continue
+
+        out.append(t)
+    return out
 
 def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     corpus = (df["title"].fillna("") + " " + df["description"].fillna("")).tolist()
