@@ -97,11 +97,13 @@ def fetch_shorts_df(pages:int=1):
     # 1) ID 수집 (search.list = 100/호출)
     vids, token, p = [], None, 0
     for _ in range(pages):
+# 1차: 정치/뉴스 중심 기본 질의
         params = {
             "key": API_KEY, "part": "snippet", "type":"video", "order":"date",
             "publishedAfter": start_iso, "publishedBefore": end_iso,
             "maxResults": 50, "videoDuration":"short",
             "regionCode":"KR", "relevanceLanguage":"ko", "safeSearch":"moderate",
+            "q": "뉴스 OR 정치 OR 속보 OR 브리핑"
         }
         if token: params["pageToken"] = token
         data = api_get(SEARCH_URL, params, cost=100)
