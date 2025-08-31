@@ -171,7 +171,7 @@ STOPWORDS = set("""
 그리고 그러나 그래서 또한 또는 및 먼저 지금 바로 매우 정말 그냥 너무 보다 보다도 때는 라는 이런 저런 그런
 합니다 했다 했다가 하는 하고 하며 하면 대한 위해 에서 에게 에도 에는 으로 로 를 은 는 이 가 도 의 에 와 과
 """.split())
-STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스","채널","구독","대통령","유튜브","정치"}
+STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스","채널","구독","대통령","유튜브","정치","홈페이지"}
 # 정치·뉴스에서 의미 없는 일반어/플랫폼/도메인 토큰 제거
 STOPWORDS |= {"http","https","www","com","co","kr","net","org",
               "youtu","youtube","be","shorts","watch","tv",
@@ -203,6 +203,15 @@ def tokenize_ko_en(text: str):
         if t in {"http","https","www","com","co","kr","net","org"}:
             continue
         if t in {"youtu","youtube","be","shorts","watch"}:
+            continue
+
+        # 3-1) 한국어 접미사/어미 정리
+    suffixes = ("하기","하세요","해주세요","합니다","했다","중","채널","영상","뉴스")
+    for suf in suffixes:
+        if t.endswith(suf) and len(t) > len(suf) + 1:
+            t = t[:-len(suf)]
+
+        if t in STOPWORDS:
             continue
 
         # 4) '연합뉴스tv' → '연합뉴스' 같이 tv 접미사 정리
