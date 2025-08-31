@@ -277,8 +277,9 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
     return: (kws:list[str], src:str, logs:list[str])
     """
     logs = []
-    def add(msg):
-        if debug_log: logs.append(str(msg))
+    def add(msg: str):
+        if debug_log:
+            logs.append(str(msg))
 
     headers = {
         "User-Agent": "Mozilla/5.0",
@@ -288,16 +289,19 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
     }
     bases = ["https://trends.google.com", "https://trends.google.co.kr"]
 
-    def _google_daily():
+    # ---- Google daily ----
+    def google_daily():
         for base in bases:
             try:
                 url = f"{base}/trends/api/dailytrends"
-                r = requests.get(url, headers=headers,
-                                 params={"hl":"ko","tz":"540","geo":"KR"},
-                                 timeout=15, allow_redirects=True)
-                add(f"[daily {base}] status={r.status_code} len={len(r.text)}")
+                r = requests.get(
+                    url, headers=headers,
+                    params={"hl": "ko", "tz": "540", "geo": "KR"},
+                    timeout=15, allow_redirects=True
+                )
+                add(f"[daily {base}] {r.status_code} len={len(r.text)} {r.url}")
                 r.raise_for_status()
-                data = json.loads(r.text.lstrip(")]}',\n "))
+                data = json.loads(r.text.lstrip(\"')]}\\n \"))
                 days = data.get("default", {}).get("trendingSearchesDays", [])
                 if days:
                     items = days[0].get("trendingSearches", [])
@@ -309,7 +313,8 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
                 add(f"[daily {base}] error: {e}")
         return [], "none"
 
-    def _google_realtime():
+    # ---- Google realtime ----
+    def google_realtime():
         for base in bases:
             try:
                 url = f"{base}/trends/api/realtimetrends"
@@ -318,9 +323,9 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
                     params={"hl":"ko","tz":"540","cat":"all","fi":0,"fs":0,"geo":"KR","ri":300,"rs":20},
                     timeout=15, allow_redirects=True
                 )
-                add(f"[realtime {base}] status={r.status_code} len={len(r.text)}")
+                add(f"[realtime {base}] {r.status_code} len={len(r.text)} {r.url}")
                 r.raise_for_status()
-                data = json.loads(r.text.lstrip(")]}',\n "))
+                data = json.loads(r.text.lstrip(\"')]}\\n \"))
                 stories = data.get("storySummaries", {}).get("trendingStories", [])
                 kws = []
                 for s in stories:
@@ -335,14 +340,17 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
                 add(f"[realtime {base}] error: {e}")
         return [], "none"
 
-    def _google_rss():
+    # ---- Google daily RSS ----
+    def google_rss():
         for base in bases:
             try:
                 url = f"{base}/trends/trendingsearches/daily/rss?geo=KR&hl=ko"
-                r = requests.get(url,
-                                 headers={"User-Agent": headers["User-Agent"], "Accept":"application/rss+xml"},
-                                 timeout=15, allow_redirects=True)
-                add(f"[rss {base}] status={r.status_code} len={len(r.content)}")
+                r = requests.get(
+                    url,
+                    headers={"User-Agent": headers["User-Agent"], "Accept":"application/rss+xml"},
+                    timeout=15, allow_redirects=True
+                )
+                add(f"[rss {base}] {r.status_code} len={len(r.content)} {r.url}")
                 r.raise_for_status()
                 root = ET.fromstring(r.content)
                 titles = []
@@ -359,7 +367,8 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
                 add(f"[rss {base}] error: {e}")
         return [], "none"
 
-    def _naver_fallback():
+    # ---- NAVER fallback ----
+    def naver_fallback():
         headers_nv = {"User-Agent": "Mozilla/5.0"}
         urls = [
             "https://news.naver.com/main/ranking/popularDay.naver",
@@ -391,10 +400,10 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
                 continue
         if not texts:
             return [], "none"
+
         cnt = Counter()
         for line in texts:
-            toks = re.findall(r"[0-9A-Za-z가-힣]+", line.lower())
-            for t in toks:
+            for t in re.findall(r"[0-9A-Za-z가-힣]+", line.lower()):
                 if t.isdigit():
                     continue
                 if t in TREND_STOPWORDS or len(t) < 2:
@@ -403,24 +412,24 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
         cand = [w for w, _ in cnt.most_common(30)]
         return _clean_words(cand), "naver"
 
-    # ── 소스 선택 ──
+    # ---- source routing ----
     if source_mode == "google":
-        for fn in (_google_realtime, _google_daily, _google_rss):
+        for fn in (google_realtime, google_daily, google_rss):
             kws, src = fn()
             if kws:
                 return kws, src, logs
         return [], "none", logs
 
     if source_mode == "naver":
-        kws, src = _naver_fallback()
+        kws, src = naver_fallback()
         return kws, src, logs
 
     # auto: google → naver
-    for fn in (_google_realtime, _google_daily, _google_rss):
+    for fn in (google_realtime, google_daily, google_rss):
         kws, src = fn()
         if kws:
             return kws, src, logs
-    kws, src = _naver_fallback()
+    kws, src = naver_fallback()
     return kws, src, logs
 
 # ─────────────────────────────────────────
