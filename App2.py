@@ -174,7 +174,7 @@ STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자",
 STOPWORDS |= {"http","https","www","com","co","kr","net","org",
               "youtu","youtube","be","shorts","watch","tv",
               "news","live","breaking","official","channel",
-              "video","clip"}
+              "video","clip","yonhapnews","yonhap"}
 
 KO_JOSA   = ("은","는","이","가","을","를","의","에","에서","에게","께",
              "와","과","으로","로","도","만","까지","부터","마다","조차",
@@ -232,6 +232,21 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     # 🚫 STOPWORDS 제거
     items = [(w, c) for w, c in items if w not in STOPWORDS]
     return items[:topk]
+
+def naver_fallback_top10():
+    try:
+        url = "https://news.naver.com/main/ranking/popularDay.naver"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        r.raise_for_status()
+        titles = re.findall(r'aria-label="([^"]+)"', r.text)
+        cnt = Counter()
+        for t in titles:
+            for w in tokenize_ko_en(t):
+                if w not in STOPWORDS:
+                    cnt[w] += 1
+        return [w for w,_ in cnt.most_common(10)]
+    except:
+        return []
 
 # ───────── Google Trends (차단되면 빈값) ─────────
 @st.cache_data(show_spinner=False, ttl=900)
@@ -308,7 +323,12 @@ def google_trends_top(debug_log: bool = False):
         except Exception as e:
             add(f"[rss {base}] error: {e}")
 
-    return [], "none", logs
+    # D. 모두 실패 → 네이버 fallback 시도
+    kws = naver_fallback_top10()
+    if kws:
+        return kws[:10], "naver-fallback", logs
+    else:
+        return [], "none", logs
 
 # ───────── UI ─────────
 st.set_page_config(page_title="K-Politics/News Shorts Trend Board", page_icon="📺", layout="wide")
@@ -410,6 +430,7 @@ src_map = {
     "google-realtime": "Google Trends (Realtime)",
     "google-rss": "Google Trends (RSS)",
     "youtube-fallback": "YouTube-derived (fallback)",
+    "naver-fallback": "Naver Popular (fallback)",   # ← 요거 추가
     "none": "Unavailable",
 }
 st.caption(f"데이터 출처: {src_map.get(g_src, 'Unknown')}")
