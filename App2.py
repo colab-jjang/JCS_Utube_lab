@@ -336,26 +336,67 @@ def google_trends_top(source_mode: str = "auto"):
                 continue
         return [], "none"
 
-    def _naver_fallback():
+def _naver_fallback():
+    """
+    네이버 인기/정치 뉴스 여러 페이지를 순차 시도해서 제목을 수집한다.
+    페이지 구조 변경에 대비해 다중 셀렉터 사용.
+    """
+    headers = {"User-Agent": "Mozilla/5.0"}
+    urls = [
+        # 인기 뉴스 (일간)
+        "https://news.naver.com/main/ranking/popularDay.naver",
+        # 정치 섹션
+        "https://news.naver.com/section/100",
+        # 메인 뉴스(클러스터)
+        "https://news.naver.com/",
+    ]
+    selectors = [
+        # 인기뉴스 랭킹
+        "ol.ranking_list a",
+        "div.rankingnews_box a",
+        # 정치 섹션 목록/타이틀
+        "ul.sa_list a.sa_text_title",
+        "a.sa_text_title_link",
+        # 메인 클러스터
+        "a.cluster_text_headline",
+        # 그 외 일반 타이틀
+        "a[href*='/read?']",
+    ]
+
+    texts = []
+    for url in urls:
         try:
-            url = "https://news.naver.com/main/ranking/popularDay.naver"
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
+            r = requests.get(url, headers=headers, timeout=12)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
-            titles = [t.get_text(" ", strip=True) for t in soup.select("ol.ranking_list a")]
-            cnt = Counter()
-            for line in titles:
-                toks = re.findall(r"[0-9A-Za-z가-힣]+", line.lower())
-                for t in toks:
-                    if t.isdigit(): 
-                        continue
-                    if t in TREND_STOPWORDS or len(t) < 2:
-                        continue
-                    cnt[t] += 1
-            cand = [w for w, _ in cnt.most_common(20)]
-            return _clean_words(cand), "naver"
+            got = False
+            for css in selectors:
+                for a in soup.select(css):
+                    t = a.get_text(" ", strip=True)
+                    if t:
+                        texts.append(t)
+                        got = True
+            if got:  # 이 URL에서 뭔가 얻었으면 다음 URL은 스킵
+                break
         except Exception:
-            return [], "none"
+            continue
+
+    if not texts:
+        return [], "none"
+
+    # 토큰화 & 카운트
+    cnt = Counter()
+    for line in texts:
+        toks = re.findall(r"[0-9A-Za-z가-힣]+", line.lower())
+        for t in toks:
+            if t.isdigit(): 
+                continue
+            if t in TREND_STOPWORDS or len(t) < 2:
+                continue
+            cnt[t] += 1
+
+    cand = [w for w, _ in cnt.most_common(30)]
+    return _clean_words(cand), "naver"
 
     # 모드별
     if source_mode == "google":
