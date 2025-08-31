@@ -264,15 +264,20 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
     return items[:topk]
 
-# ───────── Google Trends (pytrends) ─────────
-@st.cache_data(show_spinner=False, ttl=1800)
+# ───────── google trends ─────────
+
+import xml.etree.ElementTree as ET
+
+@st.cache_data(show_spinner=False, ttl=900)  # 15분 캐시
 def google_trends_top():
+    # 1) 기본: pytrends.trending_searches('south_korea')
     try:
         from pytrends.request import TrendReq
-        # UA 지정 + 한국 타임존
-        pytrends = TrendReq(hl='ko', tz=540, requests_args={"headers": {"User-Agent": "Mozilla/5.0"}})
-        # 재시도 3회
-        for _ in range(3):
+        pytrends = TrendReq(
+            hl='ko', tz=540,
+            requests_args={"headers": {"User-Agent": "Mozilla/5.0"}}
+        )
+        for _ in range(2):  # 가벼운 재시도
             try:
                 df = pytrends.trending_searches(pn='south_korea')
                 kws = [str(x).strip() for x in df[0].dropna().tolist()]
@@ -281,7 +286,43 @@ def google_trends_top():
                 time.sleep(2)
             except Exception:
                 time.sleep(2)
-        return []
+    except Exception:
+        pass
+
+    # 2) 보조: pytrends.today_searches('KR')
+    try:
+        from pytrends.request import TrendReq
+        pytrends = TrendReq(
+            hl='ko', tz=540,
+            requests_args={"headers": {"User-Agent": "Mozilla/5.0"}}
+        )
+        for _ in range(2):
+            try:
+                df = pytrends.today_searches(pn='KR')
+                kws = [str(x).strip() for x in df.dropna().tolist()]
+                if kws:
+                    return kws[:10]
+                time.sleep(2)
+            except Exception:
+                time.sleep(2)
+    except Exception:
+        pass
+
+    # 3) 최종 폴백: Google Trends 공식 RSS (일간)
+    try:
+        url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=KR"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        titles = []
+        for item in root.findall(".//item"):
+            t = item.findtext("title") or ""
+            t = re.sub(r"\s+", " ", t).strip()
+            if t:
+                titles.append(t)
+            if len(titles) >= 10:
+                break
+        return titles
     except Exception:
         return []
 
