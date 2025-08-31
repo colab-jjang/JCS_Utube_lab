@@ -265,55 +265,52 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     return items[:topk]
 
 # ───────── google trends ─────────
+# 파일 상단 import
 import json, xml.etree.ElementTree as ET
-from urllib.parse import urlencode
 
 @st.cache_data(show_spinner=False, ttl=900)
 def google_trends_top(debug_log: bool = False):
     logs = []
-    def add(msg): 
+    def add(msg):
         if debug_log: logs.append(str(msg))
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json,text/plain,*/*",
         "Referer": "https://trends.google.com/",
         "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
     }
-
-    # ① 도메인 후보
     bases = ["https://trends.google.com", "https://trends.google.co.kr"]
 
-    # ---- A. Daily Trends JSON
+    # A. Daily JSON
     for base in bases:
         try:
             url = f"{base}/trends/api/dailytrends"
-            params = {"hl":"ko", "tz":"540", "geo":"KR"}
-            r = requests.get(url, headers=headers, params=params, timeout=15, allow_redirects=True)
+            r = requests.get(url, headers=headers,
+                             params={"hl":"ko","tz":"540","geo":"KR"}, timeout=15, allow_redirects=True)
             add(f"[daily {base}] status={r.status_code}, len={len(r.text)} url={r.url}")
             r.raise_for_status()
-            text = r.text.lstrip(")]}',\n ")
-            data = json.loads(text)
+            data = json.loads(r.text.lstrip(")]}',\n "))
             days = data.get("default", {}).get("trendingSearchesDays", [])
             if days:
                 items = days[0].get("trendingSearches", [])
                 kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
                 kws = [k.strip() for k in kws if k.strip()]
                 if kws:
-                    return kws[:10], logs
+                    return kws[:10], "google-daily", logs
         except Exception as e:
             add(f"[daily {base}] error: {e}")
 
-    # ---- B. Real-time Trends JSON
+    # B. Real-time JSON
     for base in bases:
         try:
             url = f"{base}/trends/api/realtimetrends"
-            params = {"hl":"ko","tz":"540","cat":"all","fi":0,"fs":0,"geo":"KR","ri":300,"rs":20}
-            r = requests.get(url, headers=headers, params=params, timeout=15, allow_redirects=True)
+            r = requests.get(url, headers=headers,
+                             params={"hl":"ko","tz":"540","cat":"all","fi":0,"fs":0,"geo":"KR","ri":300,"rs":20},
+                             timeout=15, allow_redirects=True)
             add(f"[realtime {base}] status={r.status_code}, len={len(r.text)} url={r.url}")
             r.raise_for_status()
-            text = r.text.lstrip(")]}',\n ")
-            data = json.loads(text)
+            data = json.loads(r.text.lstrip(")]}',\n "))
             stories = data.get("storySummaries", {}).get("trendingStories", [])
             kws = []
             for s in stories:
@@ -322,62 +319,31 @@ def google_trends_top(debug_log: bool = False):
                     if e and e not in kws:
                         kws.append(e)
             if kws:
-                return kws[:10], logs
+                return kws[:10], "google-realtime", logs
         except Exception as e:
             add(f"[realtime {base}] error: {e}")
 
-    # ---- C. Daily RSS
+    # C. Daily RSS
     for base in bases:
         try:
-            # hl=ko 붙여보기
             url = f"{base}/trends/trendingsearches/daily/rss?geo=KR&hl=ko"
-            r = requests.get(url, headers={"User-Agent": headers["User-Agent"], "Accept":"application/rss+xml"}, timeout=15)
+            r = requests.get(url, headers={"User-Agent": headers["User-Agent"], "Accept":"application/rss+xml"},
+                             timeout=15, allow_redirects=True)
             add(f"[rss {base}] status={r.status_code}, len={len(r.content)} url={r.url}")
             r.raise_for_status()
             root = ET.fromstring(r.content)
             titles = []
             for item in root.findall(".//item"):
                 t = (item.findtext("title") or "").strip()
-                if t:
-                    titles.append(t)
-                if len(titles) >= 10:
-                    break
+                if t: titles.append(t)
+                if len(titles) >= 10: break
             if titles:
-                return titles, logs
+                return titles, "google-rss", logs
         except Exception as e:
             add(f"[rss {base}] error: {e}")
 
-    # ---- D. 최후 폴백(네이버 급상승 관련 피드들)
-    # 지속성 관점에서 100% 보장용. 사용이 불편하면 이 블록은 제거 가능.
-    try:
-        # 네이버 '언론사 랭킹' RSS를 간단히 키워드로 환원 (간이)
-        alt_urls = [
-            "https://news.naver.com/main/ranking/popularDay.naver",  # HTML이지만 키워드 추출용 간이 파서
-        ]
-        for u in alt_urls:
-            r = requests.get(u, headers={"User-Agent": headers["User-Agent"]}, timeout=15)
-            add(f"[naver fallback] status={r.status_code}, len={len(r.text)} url={u}")
-            r.raise_for_status()
-            # 간단 키워드 추출(제목 태그에서 자주 등장하는 단어들)
-            titles = re.findall(r'<a[^>]*class="list_title"[^>]*>(.*?)</a>', r.text)
-            titles = [re.sub(r"<.*?>", "", t).strip() for t in titles]
-            if titles:
-                # 가장 많이 등장하는 명사 비슷 단어 상위 10개 (초간이)
-                words = []
-                for t in titles:
-                    words += re.findall(r"[가-힣A-Za-z]{2,}", t)
-                cnt = {}
-                for w in words:
-                    cnt[w] = cnt.get(w, 0) + 1
-                ranked = sorted(cnt.items(), key=lambda x: -x[1])
-                kws = [w for w,_ in ranked[:10]]
-                if kws:
-                    return kws, logs
-    except Exception as e:
-        add(f"[naver fallback] error: {e}")
-
-    return [], logs
-
+    # D. 모두 실패 → 빈값 반환
+    return [], "none", logs
 
 # ───────── UI ─────────
 st.set_page_config(page_title="K-Politics/News Shorts Trend Board", page_icon="📺", layout="wide")
@@ -430,13 +396,36 @@ with st.spinner("데이터 수집/분석 중…"):
     ).head(base_pool_n)
     
     # 키워드 Top10
-    yt_kw = top_keywords_from_df(df_pool, topk=10)
-    yt_kw_words = [w for w,_ in yt_kw]
-    # 구글 트렌드
-    g_kw, g_logs = google_trends_top(debug_log=debug)  # ✅
+# (유튜브 키워드 추출 후)
+yt_kw = top_keywords_from_df(df_pool, topk=10)
+yt_kw_words = [w for w, _ in yt_kw]
+
+# --- Google Trends 호출
+    g_kw, g_src, g_logs = google_trends_top(debug_log=debug)
     
+    # 디버그 로그(선택)
     if debug:
         st.warning("Google Trends fetch logs:\n" + ("\n".join(g_logs) if g_logs else "(no logs)"))
+    
+    # 자동 대체 로직
+    if not g_kw:                         # 구글이 전부 막힌 경우
+        g_kw = yt_kw_words[:10]          # 유튜브 상위 키워드로 대체
+        g_src = "youtube-fallback"
+    
+    # 출처 라벨 표시
+    src_map = {
+        "google-daily": "Google Trends (Daily)",
+        "google-realtime": "Google Trends (Realtime)",
+        "google-rss": "Google Trends (RSS)",
+        "youtube-fallback": "YouTube-derived (fallback)",
+        "none": "Unavailable",
+    }
+    st.caption(f"데이터 출처: {src_map.get(g_src, 'Unknown')}")
+    
+    # ❌ 기존의 “현재 Google Trends 데이터를 가져오지 못했습니다…” 파란 박스는 제거
+    #    (혹은 g_src == 'none' 인 경우에만 띄우도록 조건 변경)
+    # if g_src == "none":
+    #     st.info("현재 Google Trends 데이터를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.")
 
 # --- improved intersection (bidirectional partial match, normalized) ---
 def _norm(s: str) -> str:
