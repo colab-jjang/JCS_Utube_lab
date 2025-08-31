@@ -351,9 +351,7 @@ if run:
     yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w, _ in yt_kw]
 
-    g_kw, g_src, g_logs = google_trends_top(debug_log=debug)
-    if debug:
-        st.warning("Google Trends fetch logs:\n" + ("\n".join(g_logs) if g_logs else "(no logs)"))
+    g_kw, g_src, g_logs = google_trends_top()
 
     if not g_kw:
         g_kw = yt_kw_words[:10]
