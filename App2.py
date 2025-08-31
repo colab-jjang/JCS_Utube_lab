@@ -229,14 +229,23 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     return items[:topk]
 
 # ───────── Google Trends (pytrends) ─────────
-@st.cache_data(show_spinner=False, ttl=1800)  # 30분 캐시
+@st.cache_data(show_spinner=False, ttl=1800)
 def google_trends_top():
     try:
         from pytrends.request import TrendReq
-        pytrends = TrendReq(hl='ko', tz=540)
-        df = pytrends.trending_searches(pn='south_korea')  # 상위 20
-        kws = [str(x).strip() for x in df[0].dropna().tolist()]
-        return kws[:10]
+        # UA 지정 + 한국 타임존
+        pytrends = TrendReq(hl='ko', tz=540, requests_args={"headers": {"User-Agent": "Mozilla/5.0"}})
+        # 재시도 3회
+        for _ in range(3):
+            try:
+                df = pytrends.trending_searches(pn='south_korea')
+                kws = [str(x).strip() for x in df[0].dropna().tolist()]
+                if kws:
+                    return kws[:10]
+                time.sleep(2)
+            except Exception:
+                time.sleep(2)
+        return []
     except Exception:
         return []
 
@@ -284,8 +293,8 @@ with st.spinner("데이터 수집/분석 중…"):
 # --- improved intersection (bidirectional partial match, normalized) ---
 def _norm(s: str) -> str:
     s = s.lower().strip()
-    s = re.sub(r"\s+", "", s)             # 공백 제거
-    s = re.sub(r"[^\w가-힣]", "", s)       # 특수문자 제거
+    s = re.sub(r"\s+", "", s)
+    s = re.sub(r"[^\w가-힣]", "", s)
     return s
 
 yt_norm = [_norm(w) for w in yt_kw_words]
@@ -294,9 +303,10 @@ g_norm  = [_norm(g) for g in g_kw]
 hot = []
 for raw_y, y in zip(yt_kw_words, yt_norm):
     for g in g_norm:
-        if y and g and (y in g or g in y):  # 양방향 부분일치
-            hot.append(raw_y)               # 원래 표기를 유지
-            break
+        if y and g and (y in g or g in y):
+            hot.append(raw_y); break
+_seen=set()
+hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
 
 # 순서 보존하며 중복 제거
 _seen = set()
