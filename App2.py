@@ -301,6 +301,8 @@ def google_trends_top(debug_log: bool = False):
                     e = (e or "").strip()
                     if e and e not in kws:
                         kws.append(e)
+            # 🚫 STOPWORDS 제거
+            kws = [k for k in kws if k not in STOPWORDS]
             if kws: return kws[:10], "google-realtime", logs
         except Exception as e:
             add(f"[realtime {base}] error: {e}")
@@ -319,7 +321,9 @@ def google_trends_top(debug_log: bool = False):
                 t = (item.findtext("title") or "").strip()
                 if t: titles.append(t)
                 if len(titles) >= 10: break
-            if titles: return titles, "google-rss", logs
+            # 🚫 STOPWORDS 제거
+            kws = [t for t in titles if t not in STOPWORDS]
+            if kws: return kws[:10], "google-rss", logs
         except Exception as e:
             add(f"[rss {base}] error: {e}")
 
@@ -378,9 +382,9 @@ if run:
 
     g_kw, g_src, g_logs = google_trends_top()
 
+    # 구글/네이버 모두 실패 시에는 빈 목록 유지 (유튜브로 대체하지 않음)
     if not g_kw:
-        g_kw = yt_kw_words[:10]
-        g_src = "youtube-fallback"
+        g_src = "none"
 
     def _norm(s: str) -> str:
         s = str(s).lower().strip()
