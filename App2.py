@@ -229,6 +229,8 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     for line in corpus:
         cnt.update(tokenize_ko_en(line))
     items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
+    # 🚫 STOPWORDS 제거
+    items = [(w, c) for w, c in items if w not in STOPWORDS]
     return items[:topk]
 
 # ───────── Google Trends (차단되면 빈값) ─────────
@@ -260,6 +262,9 @@ def google_trends_top(debug_log: bool = False):
                 items = days[0].get("trendingSearches", [])
                 kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
                 kws = [k.strip() for k in kws if k.strip()]
+                # 🚫 STOPWORDS 제거
+                kws = [k for k in kws if k not in STOPWORDS]
+                
                 if kws: return kws[:10], "google-daily", logs
         except Exception as e:
             add(f"[daily {base}] error: {e}")
