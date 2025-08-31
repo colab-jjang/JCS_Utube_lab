@@ -346,7 +346,8 @@ with st.sidebar:
     ttl_sec = ttl_map[ttl_choice]
 
     rank_mode = st.radio("정렬 기준", ["상승속도(뷰/시간)", "조회수(총합)"], horizontal=True, index=0)
-
+    sort_order = st.radio("정렬 순서", ["내림차순", "오름차순"], horizontal=True, index=0)
+    
     show_speed_cols = st.checkbox("상승속도/경과시간 컬럼 표시", value=True)
 
     run = st.button("새로고침(데이터 수집)")
@@ -359,10 +360,18 @@ if run:
 
 with st.spinner("데이터 수집/분석 중…"):
     df = fetch_shorts_df(pages=pages)
-    base_col = "views_per_hour" if rank_mode.startswith("상승속도") else "view_count"
+    base_col = "views_per_hour" 
+        
+    if rank_mode.startswith("상승속도"):
+        base_col = "views_per_hour"
+    else:
+        base_col = "view_count"
+
+ascending_flag = (sort_order == "오름차순")    
     # 분석용 상위 풀(최대 size 또는 100 이상은 100)
     base_pool_n = max(50, size)
-    df_pool = df.sort_values(base_col, ascending=False, ignore_index=True).head(min(len(df), base_pool_n))
+df_pool = df.sort_values(base_col, ascending=ascending_flag,
+                         ignore_index=True).head(min(len(df), base_pool_n))
     # 키워드 Top10
     yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w,_ in yt_kw]
@@ -413,8 +422,10 @@ with left:
     st.subheader("📈 유튜브(48h·상위 풀) 키워드 Top10")
     if yt_kw:
         df_kw = pd.DataFrame(yt_kw, columns=["keyword","count"])
-        st.bar_chart(df_kw.set_index("keyword")["count"])
-        st.dataframe(df_kw, use_container_width=True, hide_index=True)
+        df_kw_sorted = df_kw.sort_values("count", ascending=ascending_flag)
+        
+        st.bar_chart(df_kw_sorted.set_index("keyword")["count"])
+        st.dataframe(df_kw_sorted, use_container_width=True, hide_index=True)
         st.download_button("유튜브 키워드 CSV",
                            df_kw.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
                            file_name="yt_keywords_top10.csv", mime="text/csv")
@@ -455,11 +466,25 @@ cols = ["title","view_count","length","channel","url","published_at_kst"]
 if show_speed_cols:
     cols = ["title","view_count","views_per_hour","hours_since_upload","length","channel","url","published_at_kst"]
 
-df_show = df_show.sort_values(base_col, ascending=False, ignore_index=True)[cols]
-st.dataframe(df_show, use_container_width=True)
-st.download_button("현재 표 CSV 다운로드",
-                   df_show.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
-                   file_name="shorts_ranked.csv", mime="text/csv")
+# 정렬/필터까지 끝난 최종 표
+df_show = df_show.sort_values(base_col, ascending=ascending_flag, ignore_index=True)[cols]
+
+# ▶︎ 세션에 고정해서, rerun이 일어나도 동일한 데이터를 유지
+st.session_state["df_show_frozen"] = df_show.copy()
+
+# 화면 표시
+st.dataframe(st.session_state["df_show_frozen"], use_container_width=True)
+
+# CSV 바이트를 미리 만들어 두고 버튼에는 '값'만 전달 (함수 호출 X)
+csv_bytes = st.session_state["df_show_frozen"].to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+
+st.download_button(
+    "현재 표 CSV 다운로드",
+    data=csv_bytes,
+    file_name="shorts_ranked.csv",
+    mime="text/csv",
+    key="dl_df_show"  # 고유 키 부여
+)
 
 # 하단 안내
 st.markdown("""
