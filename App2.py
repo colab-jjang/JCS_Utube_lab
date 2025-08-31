@@ -317,7 +317,6 @@ with st.sidebar:
     st.header("수집 옵션")
     size = st.selectbox("수집 규모(Shorts 후보 수)", [50, 100, 200], index=1)
     pages = {50:1, 100:2, 200:4}[size]
-    debug = st.checkbox("디버그 모드(트렌드 로그 표시)", value=False)
 
     ttl_choice = st.selectbox("캐시 TTL(자동 절약)", ["15분","30분(추천)","60분"], index=1)
     ttl_map = {"15분":900, "30분(추천)":1800, "60분":3600}
