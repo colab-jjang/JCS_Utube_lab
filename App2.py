@@ -267,33 +267,37 @@ def _clean_words(words):
     return uniq[:10]
 
 @st.cache_data(show_spinner=False, ttl=900)
-def google_trends_top(source_mode: str = "auto"):
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json,text/plain,*/*",
-        "Referer": "https://trends.google.com/",
-        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-    }
-    bases = ["https://trends.google.com", "https://trends.google.co.kr"]
+# 원래: def google_trends_top(debug_log: bool = False):
+def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
+    """
+    source_mode: "auto" | "google" | "naver" | "youtube"
+    """
+    logs = []
+    def add(msg):
+        if debug_log: logs.append(str(msg))
 
-    def _google_daily():
-        for base in bases:
-            try:
-                url = f"{base}/trends/api/dailytrends"
-                r = requests.get(url, headers=headers,
-                                 params={"hl":"ko","tz":"540","geo":"KR"},
-                                 timeout=15, allow_redirects=True)
-                r.raise_for_status()
-                data = json.loads(r.text.lstrip(")]}',\n "))
-                days = data.get("default", {}).get("trendingSearchesDays", [])
-                if not days: 
-                    continue
-                items = days[0].get("trendingSearches", [])
-                kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
-                return _clean_words(kws), "google-daily"
-            except Exception:
-                continue
-        return [], "none"
+    # ↓↓↓ 소스 선택 분기 (당신 코드 구조에 맞춰 이미 있는 구글/네이버/유튜브 수집 루틴를 호출)
+    if source_mode == "google":
+        # 구글만 시도
+        kws, src = _fetch_trends_google(add)     # (없다면 당신의 구글 수집 코드 블록으로 대체)
+        return kws, src, logs
+
+    if source_mode == "naver":
+        kws, src = _fetch_trends_naver(add)      # (네이버 수집 루틴)
+        return kws, src, logs
+
+    if source_mode == "youtube":
+        kws, src = _fetch_trends_youtube_fallback(add)  # (유튜브 상위 키워드 fallback)
+        return kws, src, logs
+
+    # auto: google → naver → youtube
+    kws, src = _fetch_trends_google(add)
+    if not kws:
+        kws, src = _fetch_trends_naver(add)
+    if not kws:
+        kws, src = _fetch_trends_youtube_fallback(add)
+
+    return (kws or []), (src or "none"), logs
 
     def _google_realtime():
         for base in bases:
@@ -473,7 +477,8 @@ mode_map = {
 source_mode = mode_map[trend_source]
 
 # 트렌드 키워드
-g_kw, g_src = google_trends_top(source_mode=source_mode)
+# 기존(두 개만 언팩하거나 source_mode 인자만 넘기던 곳)을 아래처럼:
+g_kw, g_src, g_logs = google_trends_top(source_mode=source_mode, debug_log=False)
 st.caption(f"트렌드 소스: {g_src if g_kw else 'Unavailable'} · 키워드 {len(g_kw)}개 · 모드={trend_source}")
 
 # ───────── 쿼터/리셋 정보 ─────────
