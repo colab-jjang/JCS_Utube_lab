@@ -39,9 +39,7 @@ def save_quota_used(value: int):
     QUOTA_FILE.write_text(json.dumps(data), encoding="utf-8")
 
 def add_quota(cost: int):
-    # 세션(화면 표시는 세션 기준)
     st.session_state["quota_used"] = st.session_state.get("quota_used", 0) + int(cost)
-    # 파일(서버 공용 누적)
     current = load_quota_used()
     save_quota_used(current + int(cost))
 
@@ -85,6 +83,10 @@ def to_kst(iso_str):
     if not iso_str: return ""
     t = dt.datetime.fromisoformat(iso_str.replace("Z","+00:00")).astimezone(KST)
     return t.strftime("%Y-%m-%d %H:%M:%S")
+
+def to_kst_dt(iso_str):
+    # publishedAt(UTC ISO) → timezone-aware KST datetime
+    return dt.datetime.fromisoformat(iso_str.replace("Z","+00:00")).astimezone(KST) if iso_str else None
 
 # ───────── 데이터 수집 (캐시 가능) ─────────
 @st.cache_data(show_spinner=False)
@@ -133,6 +135,7 @@ def fetch_shorts_df(pages:int=1):
         secs = parse_iso8601_duration(cd.get("duration",""))
         if secs is None or secs>60:
             continue
+        pub_iso = sn.get("publishedAt","")
         rows.append({
             "video_id": vid,
             "title": sn.get("title",""),
@@ -142,12 +145,23 @@ def fetch_shorts_df(pages:int=1):
             "length_seconds": secs,
             "channel": sn.get("channelTitle",""),
             "url": f"https://www.youtube.com/watch?v={vid}",
-            "published_at_kst": to_kst(sn.get("publishedAt","")),
+            "published_at_kst": to_kst(pub_iso),
+            "published_dt_kst": to_kst_dt(pub_iso),
         })
     df = pd.DataFrame(rows, columns=[
         "video_id","title","description","view_count","length","length_seconds",
-        "channel","url","published_at_kst"
+        "channel","url","published_at_kst","published_dt_kst"
     ])
+
+    # ─ 급상승 지표 계산
+    now_kst = dt.datetime.now(KST)
+    if not df.empty:
+        df["hours_since_upload"] = (now_kst - pd.to_datetime(df["published_dt_kst"])).dt.total_seconds() / 3600.0
+        df["hours_since_upload"] = df["hours_since_upload"].clip(lower=(1.0/60.0))  # 최소 1분
+        df["views_per_hour"] = (df["view_count"] / df["hours_since_upload"]).round(1)
+    else:
+        df["hours_since_upload"] = []
+        df["views_per_hour"] = []
     return df
 
 # ───────── 키워드 추출 ─────────
@@ -157,10 +171,8 @@ STOPWORDS = set("""
 """.split())
 
 def tokenize_ko_en(text:str):
-    # 한글/영문/숫자만 남기고 공백으로 분리
     text = re.sub(r"[^0-9A-Za-z가-힣]+", " ", str(text))
     toks = [t.strip().lower() for t in text.split() if t.strip()]
-    # 짧은 토큰/불용어 제거
     toks = [t for t in toks if len(t)>=2 and t not in STOPWORDS]
     return toks
 
@@ -169,7 +181,6 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     cnt = Counter()
     for line in corpus:
         cnt.update(tokenize_ko_en(line))
-    # 숫자-only 토큰 과도한 비중 방지: 전처리
     items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
     return items[:topk]
 
@@ -179,11 +190,10 @@ def google_trends_top():
     try:
         from pytrends.request import TrendReq
         pytrends = TrendReq(hl='ko', tz=540)
-        # KR의 "오늘의 검색어" 근사치 (pytrends는 실시간 카테고리 API 일부만 제공)
         df = pytrends.trending_searches(pn='south_korea')  # 상위 20
         kws = [str(x).strip() for x in df[0].dropna().tolist()]
         return kws[:10]
-    except Exception as e:
+    except Exception:
         return []
 
 # ───────── UI ─────────
@@ -191,7 +201,7 @@ st.set_page_config(page_title="K-Politics/News Shorts Trend Board", page_icon="�
 st.title("📺 48시간 유튜브 숏츠 트렌드 대시보드 (정치·뉴스)")
 
 if not API_KEY:
-    st.error("⚠️ API 키가 없습니다. Streamlit Cloud에서 App → Settings → Secrets에 `YOUTUBE_API_KEY = \"발급키\"` 를 넣어주세요.")
+    st.error("⚠️ API 키가 없습니다. App → Settings → Secrets 에 `YOUTUBE_API_KEY = \"발급키\"` 를 넣어주세요.")
     st.stop()
 
 with st.sidebar:
@@ -203,24 +213,28 @@ with st.sidebar:
     ttl_map = {"15분":900, "30분(추천)":1800, "60분":3600}
     ttl_sec = ttl_map[ttl_choice]
 
+    rank_mode = st.radio("정렬 기준", ["상승속도(뷰/시간)", "조회수(총합)"], horizontal=True, index=0)
+
+    show_speed_cols = st.checkbox("상승속도/경과시간 컬럼 표시", value=True)
+
     run = st.button("새로고침(데이터 수집)")
 
-# 캐시를 TTL별로 다르게 만들기 위해 파라미터에 ttl_sec 반영(+ time-bucket)
+# 캐시를 TTL별로 다르게 만들기 위한 버킷(옵션)
 bucket = int(time.time() // ttl_sec)
-
 if run:
-    st.cache_data.clear()  # 의도적 강제 새로고침 (사용자가 누를 때만)
-    st.success("데이터 새로고침을 시작합니다. 잠시만요…")
+    st.cache_data.clear()
+    st.success("데이터 새로고침 시작!")
 
 with st.spinner("데이터 수집/분석 중…"):
-    # fetch_shorts_df는 내부적으로 @st.cache_data 이므로 빠른 재접속/재실행에 유리
     df = fetch_shorts_df(pages=pages)
-    # 조회수 기준 상위 N(분석 기반)
-    df_top = df.sort_values("view_count", ascending=False, ignore_index=True).head(min(len(df), max(50, size)))
-    # 유튜브 키워드 Top10
-    yt_kw = top_keywords_from_df(df_top, topk=10)
+    base_col = "views_per_hour" if rank_mode.startswith("상승속도") else "view_count"
+    # 분석용 상위 풀(최대 size 또는 100 이상은 100)
+    base_pool_n = max(50, size)
+    df_pool = df.sort_values(base_col, ascending=False, ignore_index=True).head(min(len(df), base_pool_n))
+    # 키워드 Top10
+    yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w,_ in yt_kw]
-    # 구글 트렌드 Top10
+    # 구글 트렌드
     g_kw = google_trends_top()
     # 교집합
     hot_intersection = [w for w in yt_kw_words if any(w in g for g in g_kw)]
@@ -239,29 +253,28 @@ with quota1:
     st.progress(pct, text=f"사용 {used} / {DAILY_QUOTA}  (남은 {remaining})")
 with quota2:
     st.metric("남은 쿼터(추정)", value=f"{remaining:,}", delta=f"리셋까지 {str(remain_td).split('.')[0]}")
-
 st.caption("※ YouTube Data API 일일 쿼터는 매일 PT(미국 서부) 자정에 리셋됩니다. (KST 기준 다음날 16~17시, 서머타임 따라 변동)")
 
 # ───────── 보드 상단: 키워드 뷰 ─────────
 left, right = st.columns(2)
 with left:
-    st.subheader("📈 유튜브(48h·조회수 Top) 키워드 Top10")
+    st.subheader("📈 유튜브(48h·상위 풀) 키워드 Top10")
     if yt_kw:
         df_kw = pd.DataFrame(yt_kw, columns=["keyword","count"])
         st.bar_chart(df_kw.set_index("keyword")["count"])
         st.dataframe(df_kw, use_container_width=True, hide_index=True)
-        st.download_button("유튜브 키워드 CSV 다운로드",
+        st.download_button("유튜브 키워드 CSV",
                            df_kw.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
                            file_name="yt_keywords_top10.csv", mime="text/csv")
     else:
-        st.info("키워드를 추출할 데이터가 충분치 않습니다. 수집 규모/페이지를 늘려보세요.")
+        st.info("키워드를 추출할 데이터가 부족합니다. 수집 규모/페이지를 늘려보세요.")
 
 with right:
     st.subheader("🌐 Google Trends (KR) Top10")
     if g_kw:
         df_g = pd.DataFrame({"keyword": g_kw})
         st.dataframe(df_g, use_container_width=True, hide_index=True)
-        st.download_button("구글 트렌드 CSV 다운로드",
+        st.download_button("구글 트렌드 CSV",
                            df_g.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
                            file_name="google_trends_top10.csv", mime="text/csv")
     else:
@@ -273,25 +286,28 @@ if hot_intersection:
 else:
     st.write("현재 교집합 키워드가 없습니다.")
 
-# ───────── 하단: 키워드로 영상 필터/표시 ─────────
+# ───────── 하단: 결과 테이블 ─────────
 st.subheader("🎬 관련 숏츠 리스트")
-default_kw = hot_intersection[0] if hot_intersection else (yt_kw_words[0] if yt_kw_words else "")
+default_kw = (hot_intersection[0] if hot_intersection
+              else (yt_kw_words[0] if yt_kw_words else ""))
 pick_kw = st.text_input("키워드로 필터(부분 일치)", value=default_kw)
 
-df_show = df_top.copy()
+df_show = df_pool.copy()
 if pick_kw.strip():
     pat = re.compile(re.escape(pick_kw.strip()), re.IGNORECASE)
     mask = df_show["title"].str.contains(pat) | df_show["description"].str.contains(pat)
     df_show = df_show[mask]
 
-# 표: 제목-조회수-영상길이-계정명-링크-업로드날짜(시간포함)
-df_show = df_show.sort_values("view_count", ascending=False, ignore_index=True)
-df_show = df_show[["title","view_count","length","channel","url","published_at_kst"]]
+# 표: 제목-조회수-영상길이-계정명-링크-업로드날짜(시간포함) (+ 옵션)
+cols = ["title","view_count","length","channel","url","published_at_kst"]
+if show_speed_cols:
+    cols = ["title","view_count","views_per_hour","hours_since_upload","length","channel","url","published_at_kst"]
 
+df_show = df_show.sort_values(base_col, ascending=False, ignore_index=True)[cols]
 st.dataframe(df_show, use_container_width=True)
 st.download_button("현재 표 CSV 다운로드",
                    df_show.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
-                   file_name="shorts_filtered.csv", mime="text/csv")
+                   file_name="shorts_ranked.csv", mime="text/csv")
 
 # 하단 안내
 st.markdown("""
@@ -299,5 +315,5 @@ st.markdown("""
 **참고**
 - 유튜브 API는 업로더 국가를 확정 제공하지 않습니다. 본 앱은 `regionCode=KR`, `relevanceLanguage=ko`로 한국 우선 결과를 가져옵니다.
 - 쿼터 비용(추정): `search.list = 100/호출`, `videos.list = 1/호출(50개 단위)`. 수집 규모가 커질수록 비용이 늘어납니다.
-- 캐시 TTL을 늘리면 쿼터 사용량을 크게 줄일 수 있습니다.
+- 캐시 TTL을 길게 설정하면 쿼터 사용량을 크게 줄일 수 있습니다.
 """)
