@@ -363,15 +363,20 @@ with st.spinner("데이터 수집/분석 중…"):
     base_col = "views_per_hour" 
         
     if rank_mode.startswith("상승속도"):
-        base_col = "views_per_hour"
+    base_col = "views_per_hour"
     else:
         base_col = "view_count"
 
-ascending_flag = (sort_order == "오름차순")    
-    # 분석용 상위 풀(최대 size 또는 100 이상은 100)
-    base_pool_n = max(50, size)
-df_pool = df.sort_values(base_col, ascending=ascending_flag,
-                         ignore_index=True).head(min(len(df), base_pool_n))
+    ascending_flag = (sort_order == "오름차순")
+
+# 분석용 상위 풀 (최소 50, 많으면 df 크기만큼)
+    base_pool_n = max(50, len(df))
+    df_pool = df.sort_values(
+        base_col,
+        ascending=ascending_flag,
+        ignore_index=True
+    ).head(base_pool_n)
+    
     # 키워드 Top10
     yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w,_ in yt_kw]
