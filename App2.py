@@ -266,58 +266,60 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
 
 # ───────── google trends ─────────
 
+import json
 import xml.etree.ElementTree as ET
 
 @st.cache_data(show_spinner=False, ttl=900)  # 15분 캐시
 def google_trends_top():
-    # 1) 기본: pytrends.trending_searches('south_korea')
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    # 1) Daily Trends JSON (공식 페이지가 쓰는 비공식 API)
     try:
-        from pytrends.request import TrendReq
-        pytrends = TrendReq(
-            hl='ko', tz=540,
-            requests_args={"headers": {"User-Agent": "Mozilla/5.0"}}
-        )
-        for _ in range(2):  # 가벼운 재시도
-            try:
-                df = pytrends.trending_searches(pn='south_korea')
-                kws = [str(x).strip() for x in df[0].dropna().tolist()]
-                if kws:
-                    return kws[:10]
-                time.sleep(2)
-            except Exception:
-                time.sleep(2)
+        url = "https://trends.google.com/trends/api/dailytrends"
+        params = {"hl": "ko", "tz": "540", "geo": "KR"}
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        r.raise_for_status()
+        # 응답 앞부분의 )]}', 제거
+        text = r.text.lstrip(")]}',\n ")
+        data = json.loads(text)
+        days = data.get("default", {}).get("trendingSearchesDays", [])
+        if days:
+            items = days[0].get("trendingSearches", [])
+            kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
+            kws = [k.strip() for k in kws if k.strip()]
+            if kws:
+                return kws[:10]
     except Exception:
         pass
 
-    # 2) 보조: pytrends.today_searches('KR')
+    # 2) Real-time Trends JSON (카테고리 all)
     try:
-        from pytrends.request import TrendReq
-        pytrends = TrendReq(
-            hl='ko', tz=540,
-            requests_args={"headers": {"User-Agent": "Mozilla/5.0"}}
-        )
-        for _ in range(2):
-            try:
-                df = pytrends.today_searches(pn='KR')
-                kws = [str(x).strip() for x in df.dropna().tolist()]
-                if kws:
-                    return kws[:10]
-                time.sleep(2)
-            except Exception:
-                time.sleep(2)
+        url = "https://trends.google.com/trends/api/realtimetrends"
+        params = {"hl": "ko", "tz": "540", "cat": "all", "fi": 0, "fs": 0, "geo": "KR", "ri": 300, "rs": 20}
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        r.raise_for_status()
+        text = r.text.lstrip(")]}',\n ")
+        data = json.loads(text)
+        story_list = data.get("storySummaries", {}).get("trendingStories", [])
+        kws = []
+        for s in story_list:
+            for e in s.get("entityNames", []):
+                if e and e not in kws:
+                    kws.append(e)
+        if kws:
+            return kws[:10]
     except Exception:
         pass
 
-    # 3) 최종 폴백: Google Trends 공식 RSS (일간)
+    # 3) 최종 폴백: 일간 RSS
     try:
         url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=KR"
-        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        r = requests.get(url, headers=headers, timeout=15)
         r.raise_for_status()
         root = ET.fromstring(r.content)
         titles = []
         for item in root.findall(".//item"):
-            t = item.findtext("title") or ""
-            t = re.sub(r"\s+", " ", t).strip()
+            t = (item.findtext("title") or "").strip()
             if t:
                 titles.append(t)
             if len(titles) >= 10:
