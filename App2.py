@@ -174,7 +174,7 @@ STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자",
 STOPWORDS |= {"http","https","www","com","co","kr","net","org",
               "youtu","youtube","be","shorts","watch","tv",
               "news","live","breaking","official","channel",
-              "video","clip","yonhapnews","yonhap"}
+              "video","clip"}
 
 KO_JOSA   = ("은","는","이","가","을","를","의","에","에서","에게","께",
              "와","과","으로","로","도","만","까지","부터","마다","조차",
@@ -229,15 +229,17 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     for line in corpus:
         cnt.update(tokenize_ko_en(line))
     items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
-    # 🚫 STOPWORDS 제거
+    # 공통 STOPWORDS 적용
     items = [(w, c) for w, c in items if w not in STOPWORDS]
     return items[:topk]
 
+# ───────── Fallback: Naver Popular ─────────
 def naver_fallback_top10():
     try:
         url = "https://news.naver.com/main/ranking/popularDay.naver"
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         r.raise_for_status()
+        # 제목 추출(간이)
         titles = re.findall(r'aria-label="([^"]+)"', r.text)
         cnt = Counter()
         for t in titles:
@@ -277,9 +279,8 @@ def google_trends_top(debug_log: bool = False):
                 items = days[0].get("trendingSearches", [])
                 kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
                 kws = [k.strip() for k in kws if k.strip()]
-                # 🚫 STOPWORDS 제거
+                # STOPWORDS 적용
                 kws = [k for k in kws if k not in STOPWORDS]
-                
                 if kws: return kws[:10], "google-daily", logs
         except Exception as e:
             add(f"[daily {base}] error: {e}")
@@ -301,7 +302,7 @@ def google_trends_top(debug_log: bool = False):
                     e = (e or "").strip()
                     if e and e not in kws:
                         kws.append(e)
-            # 🚫 STOPWORDS 제거
+            # STOPWORDS 적용
             kws = [k for k in kws if k not in STOPWORDS]
             if kws: return kws[:10], "google-realtime", logs
         except Exception as e:
@@ -320,8 +321,7 @@ def google_trends_top(debug_log: bool = False):
             for item in root.findall(".//item"):
                 t = (item.findtext("title") or "").strip()
                 if t: titles.append(t)
-                if len(titles) >= 10: break
-            # 🚫 STOPWORDS 제거
+                # STOPWORDS 적용
             kws = [t for t in titles if t not in STOPWORDS]
             if kws: return kws[:10], "google-rss", logs
         except Exception as e:
@@ -355,6 +355,14 @@ with st.sidebar:
     sort_order = st.radio("정렬 순서", ["내림차순", "오름차순"], horizontal=True, index=0)
     show_speed_cols = st.checkbox("상승속도/경과시간 컬럼 표시", value=True)
 
+    # ⬇️ 트렌드 소스 강제 선택 (핵심)
+    source_mode = st.radio(
+        "트렌드 소스 선택",
+        ["자동(구글→네이버)", "구글만", "네이버만", "유튜브만"],
+        index=0,
+        help="두 목록이 같게 보이면 이걸 바꿔서 원인을 확인하세요."
+    )
+
     run = st.button("새로고침(데이터 수집)")
 
 bucket = int(time.time() // ttl_sec)
@@ -380,12 +388,32 @@ if run:
     yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w, _ in yt_kw]
 
-    g_kw, g_src, g_logs = google_trends_top()
+    # === 트렌드 키워드 소스별 강제 모드 ===
+    g_kw = []
+    g_src = "none"
+    g_logs = []
 
-    # 구글/네이버 모두 실패 시에는 빈 목록 유지 (유튜브로 대체하지 않음)
-    if not g_kw:
-        g_src = "none"
+    if source_mode == "구글만" or source_mode == "자동(구글→네이버)":
+        # 1) 구글 시도
+        g_kw, g_src, g_logs = google_trends_top()
+        # 구글이 막혀서 비었으면
+        if not g_kw:
+            g_src = "none"
+            if source_mode == "자동(구글→네이버)":
+                # 2) 네이버 폴백
+                g_kw = naver_fallback_top10()
+                if g_kw:
+                    g_src = "naver-fallback"
 
+    elif source_mode == "네이버만":
+        g_kw = naver_fallback_top10()
+        g_src = "naver-fallback" if g_kw else "none"
+
+    elif source_mode == "유튜브만":
+        g_kw = yt_kw_words[:10]
+        g_src = "youtube-derived"
+
+    # 교집합 계산 (정규화)
     def _norm(s: str) -> str:
         s = str(s).lower().strip()
         s = re.sub(r"\s+", "", s)
@@ -403,6 +431,10 @@ if run:
     _seen = set()
     hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
 
+    # 세션 저장 전에 이전 값 지우기(잔존 방지)
+    for k in ["g_kw", "g_src", "yt_kw", "yt_kw_words", "hot_intersection"]:
+        if k in st.session_state: del st.session_state[k]
+
     st.session_state.update({
         "df": df,
         "df_pool": df_pool,
@@ -413,6 +445,7 @@ if run:
         "g_kw": g_kw,
         "g_src": g_src,
         "hot_intersection": hot_intersection,
+        "source_mode": source_mode,
     })
 
 # ───────── 세션 값으로 렌더링 ─────────
@@ -424,6 +457,7 @@ yt_kw_words    = st.session_state.get("yt_kw_words", [])
 g_kw           = st.session_state.get("g_kw", [])
 g_src          = st.session_state.get("g_src", "none")
 hot_intersection = st.session_state.get("hot_intersection", [])
+source_mode    = st.session_state.get("source_mode", "자동(구글→네이버)")
 
 if df_pool.empty:
     st.info("왼쪽의 **새로고침(데이터 수집)** 버튼을 눌러 데이터를 수집하세요.")
@@ -433,11 +467,11 @@ src_map = {
     "google-daily": "Google Trends (Daily)",
     "google-realtime": "Google Trends (Realtime)",
     "google-rss": "Google Trends (RSS)",
-    "youtube-fallback": "YouTube-derived (fallback)",
-    "naver-fallback": "Naver Popular (fallback)",   # ← 요거 추가
+    "naver-fallback": "Naver Popular (fallback)",
+    "youtube-derived": "YouTube-derived (forced)",
     "none": "Unavailable",
 }
-st.caption(f"데이터 출처: {src_map.get(g_src, 'Unknown')}")
+st.caption(f"트렌드 소스: {src_map.get(g_src, 'Unknown')} · 키워드 {len(g_kw)}개 · 모드={source_mode}")
 
 # ───────── 쿼터/리셋 정보 ─────────
 now_pt = dt.datetime.now(PT)
@@ -471,15 +505,15 @@ with left:
         st.info("키워드를 추출할 데이터가 부족합니다. 수집 규모/페이지를 늘려보세요.")
 
 with right:
-    st.subheader("🌐 Google Trends (KR) Top10")
+    st.subheader("🌐 Trends Top10")
     if g_kw:
         df_g = pd.DataFrame({"keyword": g_kw})
         st.dataframe(df_g, use_container_width=True, hide_index=True)
-        st.download_button("구글 트렌드 CSV",
+        st.download_button("트렌드 키워드 CSV",
                            df_g.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
-                           file_name="google_trends_top10.csv", mime="text/csv")
+                           file_name="trends_top10.csv", mime="text/csv")
     else:
-        st.info("현재 Google Trends 데이터를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.")
+        st.info("선택한 소스에서 트렌드 키워드를 가져오지 못했습니다. (모드를 바꿔보세요)")
 
 st.subheader("🔥 교집합(둘 다 뜨는 키워드)")
 if hot_intersection:
