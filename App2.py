@@ -171,13 +171,30 @@ STOPWORDS = set("""
 그리고 그러나 그래서 또한 또는 및 먼저 지금 바로 매우 정말 그냥 너무 보다 보다도 때는 라는 이런 저런 그런
 합니다 했다 했다가 하는 하고 하며 하면 대한 위해 에서 에게 에도 에는 으로 로 를 은 는 이 가 도 의 에 와 과
 """.split())
-STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스","채널","구독","대통령","유튜브","정치","홈페이지"}
+STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스","채널","구독","대통령","유튜브","정치","홈페이지","대한민국"}
 # 정치·뉴스에서 의미 없는 일반어/플랫폼/도메인 토큰 제거
 STOPWORDS |= {"http","https","www","com","co","kr","net","org",
               "youtu","youtube","be","shorts","watch","tv",
               "news","live","breaking","official","channel",
               "video","clip"}
 
+# 한국어 조사/어미 정리
+KO_JOSA   = ("은","는","이","가","을","를","의","에","에서","에게","께",
+             "와","과","으로","로","도","만","까지","부터","마다","조차",
+             "라도","마저","밖에","처럼","뿐","께서")
+KO_SUFFIX = ("하기","하세요","하십시오","해주세요","합니다","했다","중",
+             "관련","영상","채널","뉴스","보기","등록","구독","홈페이지")
+
+def strip_korean_suffixes(t: str) -> str:
+    # 접미사부터 제거
+    for suf in KO_SUFFIX:
+        if t.endswith(suf) and len(t) > len(suf) + 1:
+            t = t[:-len(suf)]
+    # 조사 제거
+    for j in KO_JOSA:
+        if t.endswith(j) and len(t) > len(j) + 1:
+            t = t[:-len(j)]
+    return t
 
 def tokenize_ko_en(text: str):
     text = str(text or "")
@@ -196,7 +213,17 @@ def tokenize_ko_en(text: str):
     for t in raw:
         if not t or t.isdigit():
             continue
+        # … (URL 제거, raw 토큰 추출, 숫자/짧은 토큰 제거 등 기존 코드)
+        
+        # 한글 전용 토큰이면 조사/어미 정리
+        if re.fullmatch(r"[가-힣]+", t):
+            t = strip_korean_suffixes(t)
+        
+        # 정리 후 불용어/길이 재검사
+        if t in STOPWORDS or len(t) < 2:
+            continue
 
+        
         # 3) 도메인/플랫폼 일반어 필터
         if t in STOPWORDS:
             continue
