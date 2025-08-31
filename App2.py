@@ -265,21 +265,29 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     return items[:topk]
 
 # ───────── google trends ─────────
+# 파일 상단에 필요 import
+import json, xml.etree.ElementTree as ET
 
-import json
-import xml.etree.ElementTree as ET
+@st.cache_data(show_spinner=False, ttl=900)
+def google_trends_top(debug_log: bool = False):
+    logs = []
+    def add(msg):
+        if debug_log: logs.append(str(msg))
 
-@st.cache_data(show_spinner=False, ttl=900)  # 15분 캐시
-def google_trends_top():
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": "https://trends.google.com/",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+    }
 
-    # 1) Daily Trends JSON (공식 페이지가 쓰는 비공식 API)
+    # 1) daily JSON
     try:
         url = "https://trends.google.com/trends/api/dailytrends"
-        params = {"hl": "ko", "tz": "540", "geo": "KR"}
-        r = requests.get(url, headers=headers, params=params, timeout=15)
+        r = requests.get(url, headers=headers,
+                         params={"hl":"ko","tz":"540","geo":"KR"}, timeout=15)
+        add(f"[daily] status={r.status_code}, len={len(r.text)}")
         r.raise_for_status()
-        # 응답 앞부분의 )]}', 제거
         text = r.text.lstrip(")]}',\n ")
         data = json.loads(text)
         days = data.get("default", {}).get("trendingSearchesDays", [])
@@ -287,34 +295,36 @@ def google_trends_top():
             items = days[0].get("trendingSearches", [])
             kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
             kws = [k.strip() for k in kws if k.strip()]
-            if kws:
-                return kws[:10]
-    except Exception:
-        pass
+            if kws: return kws[:10], logs
+    except Exception as e:
+        add(f"[daily] error: {e}")
 
-    # 2) Real-time Trends JSON (카테고리 all)
+    # 2) realtime JSON
     try:
         url = "https://trends.google.com/trends/api/realtimetrends"
-        params = {"hl": "ko", "tz": "540", "cat": "all", "fi": 0, "fs": 0, "geo": "KR", "ri": 300, "rs": 20}
-        r = requests.get(url, headers=headers, params=params, timeout=15)
+        r = requests.get(url, headers=headers,
+                         params={"hl":"ko","tz":"540","cat":"all","fi":0,"fs":0,"geo":"KR","ri":300,"rs":20},
+                         timeout=15)
+        add(f"[realtime] status={r.status_code}, len={len(r.text)}")
         r.raise_for_status()
         text = r.text.lstrip(")]}',\n ")
         data = json.loads(text)
-        story_list = data.get("storySummaries", {}).get("trendingStories", [])
+        stories = data.get("storySummaries", {}).get("trendingStories", [])
         kws = []
-        for s in story_list:
+        for s in stories:
             for e in s.get("entityNames", []):
+                e = (e or "").strip()
                 if e and e not in kws:
                     kws.append(e)
-        if kws:
-            return kws[:10]
-    except Exception:
-        pass
+        if kws: return kws[:10], logs
+    except Exception as e:
+        add(f"[realtime] error: {e}")
 
-    # 3) 최종 폴백: 일간 RSS
+    # 3) RSS
     try:
         url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=KR"
-        r = requests.get(url, headers=headers, timeout=15)
+        r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=15)
+        add(f"[rss] status={r.status_code}, len={len(r.content)}")
         r.raise_for_status()
         root = ET.fromstring(r.content)
         titles = []
@@ -324,10 +334,11 @@ def google_trends_top():
                 titles.append(t)
             if len(titles) >= 10:
                 break
-        return titles
-    except Exception:
-        return []
+        if titles: return titles, logs
+    except Exception as e:
+        add(f"[rss] error: {e}")
 
+    return [], logs
 # ───────── UI ─────────
 st.set_page_config(page_title="K-Politics/News Shorts Trend Board", page_icon="📺", layout="wide")
 st.title("📺 48시간 유튜브 숏츠 트렌드 대시보드 (정치·뉴스)")
