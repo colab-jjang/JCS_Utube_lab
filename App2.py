@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 import datetime as dt
 from zoneinfo import ZoneInfo
+import xml.etree.ElementTree as ET
 
 # ───────── 기본 설정 ─────────
 API_KEY = st.secrets.get("YOUTUBE_API_KEY", "")
@@ -36,7 +37,7 @@ def load_quota_used():
 
 def save_quota_used(value: int):
     data = {"pt_date": _today_pt_str(), "used": int(value)}
-    QUOTA_FILE.write_text(json.dumps(data), encoding="utf-8")
+    QUOTA_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 def add_quota(cost: int):
     st.session_state["quota_used"] = st.session_state.get("quota_used", 0) + int(cost)
@@ -44,7 +45,8 @@ def add_quota(cost: int):
     save_quota_used(current + int(cost))
 
 # 세션 초기화(파일과 동기화)
-st.session_state["quota_used"] = load_quota_used()
+if "quota_used" not in st.session_state:
+    st.session_state["quota_used"] = load_quota_used()
 
 # ───────── 시간창: 최근 48시간(KST) ─────────
 def kst_window_last_48h():
@@ -85,19 +87,17 @@ def to_kst(iso_str):
     return t.strftime("%Y-%m-%d %H:%M:%S")
 
 def to_kst_dt(iso_str):
-    # publishedAt(UTC ISO) → timezone-aware KST datetime
     return dt.datetime.fromisoformat(iso_str.replace("Z","+00:00")).astimezone(KST) if iso_str else None
 
-# ───────── 데이터 수집 (캐시 가능) ─────────
+# ───────── 데이터 수집 (캐시) ─────────
 @st.cache_data(show_spinner=False)
 def fetch_shorts_df(pages:int=1):
     """pages: 1(≈50개), 2(≈100개), 4(≈200개)"""
     start_iso, end_iso, _ = kst_window_last_48h()
 
     # 1) ID 수집 (search.list = 100/호출)
-    vids, token, p = [], None, 0
+    vids, token = [], None
     for _ in range(pages):
-# 1차: 정치/뉴스 중심 기본 질의
         params = {
             "key": API_KEY, "part": "snippet", "type":"video", "order":"date",
             "publishedAfter": start_iso, "publishedBefore": end_iso,
@@ -110,8 +110,7 @@ def fetch_shorts_df(pages:int=1):
         ids = [it.get("id",{}).get("videoId") for it in data.get("items",[]) if it.get("id",{}).get("videoId")]
         vids.extend(ids)
         token = data.get("nextPageToken")
-        if not token:
-            break
+        if not token: break
 
     # de-dup
     seen=set(); ordered=[]
@@ -162,8 +161,8 @@ def fetch_shorts_df(pages:int=1):
         df["hours_since_upload"] = df["hours_since_upload"].clip(lower=(1.0/60.0))  # 최소 1분
         df["views_per_hour"] = (df["view_count"] / df["hours_since_upload"]).round(1)
     else:
-        df["hours_since_upload"] = []
-        df["views_per_hour"] = []
+        df["hours_since_upload"] = pd.Series(dtype=float)
+        df["views_per_hour"] = pd.Series(dtype=float)
     return df
 
 # ───────── 키워드 추출 ─────────
@@ -171,26 +170,22 @@ STOPWORDS = set("""
 그리고 그러나 그래서 또한 또는 및 먼저 지금 바로 매우 정말 그냥 너무 보다 보다도 때는 라는 이런 저런 그런
 합니다 했다 했다가 하는 하고 하며 하면 대한 위해 에서 에게 에도 에는 으로 로 를 은 는 이 가 도 의 에 와 과
 """.split())
-STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스","채널","구독","대통령","유튜브","정치","홈페이지","대한민국","금지","시사","모아","답해주세요","2w4o7rfi"}
-# 정치·뉴스에서 의미 없는 일반어/플랫폼/도메인 토큰 제거
+STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스","채널","구독","대통령","유튜브","정치","홈페이지","대한민국","금지","시사","모아","답해주세요"}
 STOPWORDS |= {"http","https","www","com","co","kr","net","org",
               "youtu","youtube","be","shorts","watch","tv",
               "news","live","breaking","official","channel",
               "video","clip"}
 
-# 한국어 조사/어미 정리
 KO_JOSA   = ("은","는","이","가","을","를","의","에","에서","에게","께",
              "와","과","으로","로","도","만","까지","부터","마다","조차",
              "라도","마저","밖에","처럼","뿐","께서")
-KO_SUFFIX = ("하기","하세요","하십시오","해주세요","합니다","했다","중",
+KO_SUFFIX = ("하기","하세요","십시오","해주세요","합니다","했다","중",
              "관련","영상","채널","뉴스","보기","등록","구독","홈페이지","됩니다","혔다")
 
 def strip_korean_suffixes(t: str) -> str:
-    # 접미사부터 제거
     for suf in KO_SUFFIX:
         if t.endswith(suf) and len(t) > len(suf) + 1:
             t = t[:-len(suf)]
-    # 조사 제거
     for j in KO_JOSA:
         if t.endswith(j) and len(t) > len(j) + 1:
             t = t[:-len(j)]
@@ -198,61 +193,33 @@ def strip_korean_suffixes(t: str) -> str:
 
 def tokenize_ko_en(text: str):
     text = str(text or "")
-
-    # 1) URL/이메일/해시태그/멘션 제거 또는 평문화
-    text = re.sub(r"https?://\S+", " ", text)          # http/https 링크 삭제
+    text = re.sub(r"https?://\S+", " ", text)
     text = re.sub(r"www\.\S+", " ", text)
-    text = re.sub(r"\S+@\S+", " ", text)               # 이메일
-    text = re.sub(r"#", " ", text)                     # #키워드 → 키워드로만 남기기
-    text = re.sub(r"[@_/\\]", " ", text)               # @, _, /, \ 등은 공백으로
+    text = re.sub(r"\S+@\S+", " ", text)
+    text = re.sub(r"#", " ", text)
+    text = re.sub(r"[@_/\\]", " ", text)
 
-    # 2) 토큰 후보 추출 (숫자/영문/한글만)
     raw = re.findall(r"[0-9A-Za-z가-힣]+", text.lower())
-
     out = []
     for t in raw:
         if not t or t.isdigit():
             continue
-        # … (URL 제거, raw 토큰 추출, 숫자/짧은 토큰 제거 등 기존 코드)
-        
-        # 한글 전용 토큰이면 조사/어미 정리
+        if t in STOPWORDS:             continue
+        if t in {"http","https","www","com","co","kr","net","org"}:  continue
+        if t in {"youtu","youtube","be","shorts","watch","tv","news","live","breaking","official","channel","video","clip"}:
+            continue
+
         if re.fullmatch(r"[가-힣]+", t):
             t = strip_korean_suffixes(t)
-        
-        # 정리 후 불용어/길이 재검사
-        if t in STOPWORDS or len(t) < 2:
-            continue
 
-        
-        # 3) 도메인/플랫폼 일반어 필터
-        if t in STOPWORDS:
-            continue
-        if t in {"http","https","www","com","co","kr","net","org"}:
-            continue
-        if t in {"youtu","youtube","be","shorts","watch"}:
-            continue
-
-        # 3-1) 한국어 접미사/어미 정리
-    suffixes = ("하기","하세요","해주세요","합니다","했다","중","채널","영상","뉴스")
-    for suf in suffixes:
-        if t.endswith(suf) and len(t) > len(suf) + 1:
-            t = t[:-len(suf)]
-
-        if t in STOPWORDS:
-            continue
-
-        # 4) '연합뉴스tv' → '연합뉴스' 같이 tv 접미사 정리
         if t.endswith("tv") and len(t) > 2:
             t = t[:-2]
 
-        # 5) 순수 영문 토큰은 너무 짧으면 제거
         if re.fullmatch(r"[a-z]+", t) and len(t) <= 2:
             continue
 
-        # 6) 다시 한 번 불용어/길이 체크
         if t in STOPWORDS or len(t) < 2:
             continue
-
         out.append(t)
     return out
 
@@ -264,10 +231,7 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
     return items[:topk]
 
-# ───────── google trends ─────────
-# 파일 상단 import
-import json, xml.etree.ElementTree as ET
-
+# ───────── Google Trends (차단되면 빈값) ─────────
 @st.cache_data(show_spinner=False, ttl=900)
 def google_trends_top(debug_log: bool = False):
     logs = []
@@ -296,8 +260,7 @@ def google_trends_top(debug_log: bool = False):
                 items = days[0].get("trendingSearches", [])
                 kws = [it.get("title", {}).get("query", "") for it in items if it.get("title")]
                 kws = [k.strip() for k in kws if k.strip()]
-                if kws:
-                    return kws[:10], "google-daily", logs
+                if kws: return kws[:10], "google-daily", logs
         except Exception as e:
             add(f"[daily {base}] error: {e}")
 
@@ -318,8 +281,7 @@ def google_trends_top(debug_log: bool = False):
                     e = (e or "").strip()
                     if e and e not in kws:
                         kws.append(e)
-            if kws:
-                return kws[:10], "google-realtime", logs
+            if kws: return kws[:10], "google-realtime", logs
         except Exception as e:
             add(f"[realtime {base}] error: {e}")
 
@@ -337,12 +299,10 @@ def google_trends_top(debug_log: bool = False):
                 t = (item.findtext("title") or "").strip()
                 if t: titles.append(t)
                 if len(titles) >= 10: break
-            if titles:
-                return titles, "google-rss", logs
+            if titles: return titles, "google-rss", logs
         except Exception as e:
             add(f"[rss {base}] error: {e}")
 
-    # D. 모두 실패 → 빈값 반환
     return [], "none", logs
 
 # ───────── UI ─────────
@@ -357,8 +317,7 @@ with st.sidebar:
     st.header("수집 옵션")
     size = st.selectbox("수집 규모(Shorts 후보 수)", [50, 100, 200], index=1)
     pages = {50:1, 100:2, 200:4}[size]
-    debug = st.checkbox ("디버그 모드(트렌드 로그 표시", value=False)
-    st.warning(f"DEBUG={debug}")
+    debug = st.checkbox("디버그 모드(트렌드 로그 표시)", value=False)
 
     ttl_choice = st.selectbox("캐시 TTL(자동 절약)", ["15분","30분(추천)","60분"], index=1)
     ttl_map = {"15분":900, "30분(추천)":1800, "60분":3600}
@@ -366,88 +325,92 @@ with st.sidebar:
 
     rank_mode = st.radio("정렬 기준", ["상승속도(뷰/시간)", "조회수(총합)"], horizontal=True, index=0)
     sort_order = st.radio("정렬 순서", ["내림차순", "오름차순"], horizontal=True, index=0)
-    
     show_speed_cols = st.checkbox("상승속도/경과시간 컬럼 표시", value=True)
 
     run = st.button("새로고침(데이터 수집)")
 
-# 캐시를 TTL별로 다르게 만들기 위한 버킷(옵션)
 bucket = int(time.time() // ttl_sec)
+
+# ───────── 새로고침 시: 수집/분석 → 세션 저장 ─────────
 if run:
     st.cache_data.clear()
     st.success("데이터 새로고침 시작!")
 
     with st.spinner("데이터 수집/분석 중…"):
         df = fetch_shorts_df(pages=pages)
-        
-    if rank_mode.startswith("상승속도"):
-        base_col = "views_per_hour"
-    else:
-        base_col = "view_count"
 
+    base_col = "views_per_hour" if rank_mode.startswith("상승속도") else "view_count"
     ascending_flag = (sort_order == "오름차순")
 
-# 분석용 상위 풀 (최소 50, 많으면 df 크기만큼)
     base_pool_n = max(50, len(df))
     df_pool = df.sort_values(
         base_col,
         ascending=ascending_flag,
         ignore_index=True
     ).head(base_pool_n)
-    
-    # 키워드 Top10
-    # (유튜브 키워드 추출 후)
+
     yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w, _ in yt_kw]
-    
-    # --- Google Trends 호출
+
     g_kw, g_src, g_logs = google_trends_top(debug_log=debug)
-    
-    # 디버그 로그(선택)
     if debug:
         st.warning("Google Trends fetch logs:\n" + ("\n".join(g_logs) if g_logs else "(no logs)"))
-    
-    # 자동 대체 로직
-    if not g_kw:                         # 구글이 전부 막힌 경우
-        g_kw = yt_kw_words[:10]          # 유튜브 상위 키워드로 대체
+
+    if not g_kw:
+        g_kw = yt_kw_words[:10]
         g_src = "youtube-fallback"
-    
-    # 출처 라벨 표시
-    src_map = {
-        "google-daily": "Google Trends (Daily)",
-        "google-realtime": "Google Trends (Realtime)",
-        "google-rss": "Google Trends (RSS)",
-        "youtube-fallback": "YouTube-derived (fallback)",
-        "none": "Unavailable",
-    }
-    st.caption(f"데이터 출처: {src_map.get(g_src, 'Unknown')}")
-    
-    # ❌ 기존의 “현재 Google Trends 데이터를 가져오지 못했습니다…” 파란 박스는 제거
-    #    (혹은 g_src == 'none' 인 경우에만 띄우도록 조건 변경)
-    # if g_src == "none":
-    #     st.info("현재 Google Trends 데이터를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.")
 
-# --- improved intersection (bidirectional partial match, normalized) ---
-def _norm(s: str) -> str:
-    s = s.lower().strip()
-    s = re.sub(r"\s+", "", s)
-    s = re.sub(r"[^\w가-힣]", "", s)
-    return s
+    def _norm(s: str) -> str:
+        s = str(s).lower().strip()
+        s = re.sub(r"\s+", "", s)
+        s = re.sub(r"[^\w가-힣]", "", s)
+        return s
 
-yt_norm = [_norm(w) for w in yt_kw_words]
-g_norm  = [_norm(g) for g in g_kw]
+    yt_norm = [_norm(w) for w in yt_kw_words]
+    g_norm  = [_norm(g) for g in g_kw]
 
-hot = []
-for raw_y, y in zip(yt_kw_words, yt_norm):
-    for g in g_norm:
-        if y and g and (y in g or g in y):
-            hot.append(raw_y); break
-_seen=set()
-hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
+    hot = []
+    for raw_y, y in zip(yt_kw_words, yt_norm):
+        for gg in g_norm:
+            if y and gg and (y in gg or gg in y):
+                hot.append(raw_y); break
+    _seen = set()
+    hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
 
-# 순서 보존하며 중복 제거
-_seen = set()
-hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
+    st.session_state.update({
+        "df": df,
+        "df_pool": df_pool,
+        "base_col": base_col,
+        "ascending_flag": ascending_flag,
+        "yt_kw": yt_kw,
+        "yt_kw_words": yt_kw_words,
+        "g_kw": g_kw,
+        "g_src": g_src,
+        "hot_intersection": hot_intersection,
+    })
+
+# ───────── 세션 값으로 렌더링 ─────────
+df_pool        = st.session_state.get("df_pool", pd.DataFrame())
+base_col       = st.session_state.get("base_col", "views_per_hour")
+ascending_flag = st.session_state.get("ascending_flag", False)
+yt_kw          = st.session_state.get("yt_kw", [])
+yt_kw_words    = st.session_state.get("yt_kw_words", [])
+g_kw           = st.session_state.get("g_kw", [])
+g_src          = st.session_state.get("g_src", "none")
+hot_intersection = st.session_state.get("hot_intersection", [])
+
+if df_pool.empty:
+    st.info("왼쪽의 **새로고침(데이터 수집)** 버튼을 눌러 데이터를 수집하세요.")
+    st.stop()
+
+src_map = {
+    "google-daily": "Google Trends (Daily)",
+    "google-realtime": "Google Trends (Realtime)",
+    "google-rss": "Google Trends (RSS)",
+    "youtube-fallback": "YouTube-derived (fallback)",
+    "none": "Unavailable",
+}
+st.caption(f"데이터 출처: {src_map.get(g_src, 'Unknown')}")
 
 # ───────── 쿼터/리셋 정보 ─────────
 now_pt = dt.datetime.now(PT)
@@ -471,12 +434,11 @@ with left:
     st.subheader("📈 유튜브(48h·상위 풀) 키워드 Top10")
     if yt_kw:
         df_kw = pd.DataFrame(yt_kw, columns=["keyword","count"])
-        df_kw_sorted = df_kw.sort_values("count", ascending=ascending_flag)
-        
+        df_kw_sorted = df_kw.sort_values("count", ascending=ascending_flag, ignore_index=True)
         st.bar_chart(df_kw_sorted.set_index("keyword")["count"])
         st.dataframe(df_kw_sorted, use_container_width=True, hide_index=True)
         st.download_button("유튜브 키워드 CSV",
-                           df_kw.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
+                           df_kw_sorted.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
                            file_name="yt_keywords_top10.csv", mime="text/csv")
     else:
         st.info("키워드를 추출할 데이터가 부족합니다. 수집 규모/페이지를 늘려보세요.")
@@ -510,30 +472,19 @@ if pick_kw.strip():
     mask = df_show["title"].str.contains(pat) | df_show["description"].str.contains(pat)
     df_show = df_show[mask]
 
-# 표: 제목-조회수-영상길이-계정명-링크-업로드날짜(시간포함) (+ 옵션)
 cols = ["title","view_count","length","channel","url","published_at_kst"]
 if show_speed_cols:
     cols = ["title","view_count","views_per_hour","hours_since_upload","length","channel","url","published_at_kst"]
 
-# 정렬/필터까지 끝난 최종 표
 df_show = df_show.sort_values(base_col, ascending=ascending_flag, ignore_index=True)[cols]
 
 # ▶︎ 세션에 고정해서, rerun이 일어나도 동일한 데이터를 유지
 st.session_state["df_show_frozen"] = df_show.copy()
-
-# 화면 표시
 st.dataframe(st.session_state["df_show_frozen"], use_container_width=True)
 
-# CSV 바이트를 미리 만들어 두고 버튼에는 '값'만 전달 (함수 호출 X)
 csv_bytes = st.session_state["df_show_frozen"].to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-
-st.download_button(
-    "현재 표 CSV 다운로드",
-    data=csv_bytes,
-    file_name="shorts_ranked.csv",
-    mime="text/csv",
-    key="dl_df_show"  # 고유 키 부여
-)
+st.download_button("현재 표 CSV 다운로드", data=csv_bytes,
+                   file_name="shorts_ranked.csv", mime="text/csv", key="dl_df_show")
 
 # 하단 안내
 st.markdown("""
