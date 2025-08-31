@@ -377,8 +377,8 @@ if run:
     st.cache_data.clear()
     st.success("데이터 새로고침 시작!")
 
-with st.spinner("데이터 수집/분석 중…"):
-    df = fetch_shorts_df(pages=pages)
+    with st.spinner("데이터 수집/분석 중…"):
+        df = fetch_shorts_df(pages=pages)
         
     if rank_mode.startswith("상승속도"):
         base_col = "views_per_hour"
@@ -396,11 +396,11 @@ with st.spinner("데이터 수집/분석 중…"):
     ).head(base_pool_n)
     
     # 키워드 Top10
-# (유튜브 키워드 추출 후)
-yt_kw = top_keywords_from_df(df_pool, topk=10)
-yt_kw_words = [w for w, _ in yt_kw]
-
-# --- Google Trends 호출
+    # (유튜브 키워드 추출 후)
+    yt_kw = top_keywords_from_df(df_pool, topk=10)
+    yt_kw_words = [w for w, _ in yt_kw]
+    
+    # --- Google Trends 호출
     g_kw, g_src, g_logs = google_trends_top(debug_log=debug)
     
     # 디버그 로그(선택)
