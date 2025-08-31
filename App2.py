@@ -382,7 +382,10 @@ with st.spinner("데이터 수집/분석 중…"):
     yt_kw = top_keywords_from_df(df_pool, topk=10)
     yt_kw_words = [w for w,_ in yt_kw]
     # 구글 트렌드
-    g_kw = google_trends_top()
+    g_kw, g_logs = google_trends_top(debug_log=debug)  # ✅
+    
+    if debug:
+        st.warning("Google Trends fetch logs:\n" + ("\n".join(g_logs) if g_logs else "(no logs)"))
 
 # --- improved intersection (bidirectional partial match, normalized) ---
 def _norm(s: str) -> str:
