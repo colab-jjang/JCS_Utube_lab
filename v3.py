@@ -570,11 +570,24 @@ with left:
 with right:
     st.subheader("🌐 Trends Top10")
     if g_kw:
+        # 키워드에 임시 count 컬럼 붙이기 (순위 표현용)
         df_g = pd.DataFrame({"keyword": g_kw})
-        st.dataframe(df_g, use_container_width=True, hide_index=True)
-        st.download_button("트렌드 키워드 CSV",
-                           df_g.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
-                           file_name="trends_top10.csv", mime="text/csv")
+        df_g["rank"] = range(1, len(df_g)+1)
+        df_g["count"] = df_g["rank"][::-1]  # 뒤집어서 높은 순위일수록 count 크게
+
+        # 막대 그래프
+        st.bar_chart(df_g.set_index("keyword")["count"])
+
+        # 테이블
+        st.dataframe(df_g[["rank","keyword"]], use_container_width=True, hide_index=True)
+
+        # 다운로드
+        st.download_button(
+            "트렌드 키워드 CSV",
+            df_g.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
+            file_name="trends_top10.csv",
+            mime="text/csv"
+        )
     else:
         st.info("선택한 소스에서 트렌드 키워드를 가져오지 못했습니다. (모드를 바꿔보세요)")
 
