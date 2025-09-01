@@ -1,8 +1,11 @@
+pip==24.2
+wheel==0.43.0
+
 streamlit==1.36.0
 pandas==2.2.2
 numpy==1.26.4
 requests==2.32.3
-beautifulsoup4==4.12.3
+BeautifulSoup4==4.12.3
 lxml==5.2.2
 scikit-learn==1.5.1
  
