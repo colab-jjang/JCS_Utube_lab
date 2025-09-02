@@ -319,7 +319,7 @@ def _is_bad_phrase(ph: str) -> bool:
     ws = ph.split()
     if len(ws) < 2:
         return True
-    if ws[0] in _BAD_START or ws[0] in ADVERB_BAD_START::
+    if ws[0] in _BAD_START or ws[0] in ADVERB_BAD_START:
         return True
     if any(t in _BANNED_TOKENS or t.endswith("하라") for t in ws):
         return True
