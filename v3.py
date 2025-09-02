@@ -568,6 +568,15 @@ with left:
         st.info("키워드를 추출할 데이터가 부족합니다. 수집 규모/페이지를 늘려보세요.")
 with right:
     st.subheader("🌐 Trends Top10")
+
+    # 디버그 모드면 원본 로그/키워드 보여주기
+    if trend_debug:
+        with st.expander("🔎 트렌드 디버그 로그/원본"):
+            st.write(f"source_mode={source_mode}, src={g_src}")
+            st.write(f"raw keywords({len(g_kw)}):", g_kw)
+            if g_logs:
+                st.code("\n".join(g_logs[-40:]), language="text")
+
     if g_kw:
         # 1) DataFrame 정리
         df_g = pd.DataFrame({"keyword": g_kw})
@@ -576,13 +585,12 @@ with right:
         df_g["keyword"] = df_g["keyword"].astype(str).str.strip()
         df_g = df_g[df_g["keyword"] != ""].drop_duplicates("keyword").head(10)
 
-        if len(df_g):
+        if len(df_g) >= 1:
             # 2) 순위 & 시각화용 점수(1등이 가장 큰 막대)
-            df_g["rank"] = np.arange(1, len(df_g) + 1, dtype=int)
-            # score: 1등=10, 2등=9, ... (len(df_g) 반영)
-            df_g["score"] = (len(df_g) + 1) - df_g["rank"]
+            df_g["rank"]  = np.arange(1, len(df_g) + 1, dtype=int)
+            df_g["score"] = (len(df_g) + 1) - df_g["rank"]  # 1등=최대
 
-            # 3) 막대 그래프 (Series 말고 DataFrame으로 넘기면 더 안정적)
+            # 3) 막대 그래프 (DataFrame → 안정)
             st.bar_chart(df_g.set_index("keyword")[["score"]])
 
             # 4) 표 & 다운로드
@@ -594,10 +602,9 @@ with right:
                 mime="text/csv"
             )
         else:
-            st.info("트렌드 키워드가 비어 있습니다. 소스를 바꾸거나 다시 시도해보세요.")
+            st.info("트렌드 키워드가 비어 있습니다. (중복/공백 제거 후 0개)")
     else:
-        st.info("선택한 소스에서 트렌드 키워드를 가져오지 못했습니다. (모드를 바꿔보세요)")
-
+        st.info("선택한 소스에서 트렌드 키워드를 가져오지 못했습니다. (모드를 바꾸거나 디버그로 로그를 확인하세요)")
 # ───────── 교집합 ─────────
 def _norm(s: str) -> str:
     s = s.lower().strip()
