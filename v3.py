@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 📺 48시간 유튜브 숏츠 트렌드 대시보드 (정치·뉴스)
+# 📺 24시간 유튜브 숏츠 트렌드 대시보드 (정치·뉴스)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -59,10 +59,10 @@ def add_quota(cost: int):
 if "quota_used" not in st.session_state:
     st.session_state["quota_used"] = load_quota_used()
 
-# ───────── 시간창: 최근 48시간(KST) ─────────
-def kst_window_last_48h():
+# ───────── 시간창: 최근 24시간(KST) ─────────
+def kst_window_last_24h():
     now_kst = dt.datetime.now(KST)
-    start_kst = now_kst - dt.timedelta(hours=48)
+    start_kst = now_kst - dt.timedelta(hours=24)
     start_utc = start_kst.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     end_utc   = now_kst.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     return start_utc, end_utc, now_kst
@@ -104,7 +104,7 @@ def to_kst_dt(iso_str):
 def fetch_shorts_df(pages:int=1, bucket:int=0):
     """pages: 1≈50, 2≈100, 4≈200 / bucket: TTL 분리용 키"""
     _ = bucket
-    start_iso, end_iso, _now = kst_window_last_48h()
+    start_iso, end_iso, _now = kst_window_last_24h()
 
     # 1) search.list (100/호출)
     vids, token = [], None
@@ -558,7 +558,7 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
     return (kws or []), (src or "none"), logs
 
 # ───────── UI ─────────
-st.title("📺 48시간 유튜브 숏츠 트렌드 대시보드 (정치·뉴스)")
+st.title("📺 24시간 유튜브 숏츠 트렌드 대시보드 (정치·뉴스)")
 
 with st.sidebar:
     st.header("수집 옵션")
@@ -632,7 +632,7 @@ st.caption("※ YouTube Data API 일일 쿼터는 PT 자정(=KST 오후 4~5시�
 # ───────── 상단 보드 ─────────
 left, right = st.columns(2)
 with left:
-    st.subheader("📈 유튜브(48h·상위 풀) 키워드 Top10")
+    st.subheader("📈 유튜브(24h·상위 풀) 키워드 Top10")
     if yt_kw:
         df_kw = pd.DataFrame(yt_kw, columns=["keyword","count"])
         df_kw_sorted = df_kw.sort_values("count", ascending=False)
@@ -693,12 +693,12 @@ st.write(", ".join(f"`{w}`" for w in hot_intersection) if hot_intersection else 
 # ───────── 라이브 검색 (빈결과 시 즉시 검색) ─────────
 def live_search_youtube(q: str, max_items: int = 20) -> pd.DataFrame:
     """
-    df_pool에 결과가 없을 때, 같은 48h 창으로 유튜브 API를 즉시 검색해 가져옴.
+    df_pool에 결과가 없을 때, 같은 24h 창으로 유튜브 API를 즉시 검색해 가져옴.
     search.list(100) + videos.list(1) → 쿼터 사용.
     """
     if not q.strip():
         return pd.DataFrame()
-    start_iso, end_iso, _ = kst_window_last_48h()
+    start_iso, end_iso, _ = kst_window_last_24h()
 
     # 1) search.list
     params = {
