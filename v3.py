@@ -12,19 +12,59 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from typing import List, Tuple
-
 # ───────── 기본 설정 ─────────
 st.set_page_config(page_title="K-Politics/News Shorts Trend Board", page_icon="📺", layout="wide")
 
-#여러 개의 API키 불러오기
-keys = [v for k, v in st.secrets.items() if k.startswith("YOUTUBE_API_KEY")]
+import os
+from itertools import cycle
+
+def _collect_youtube_keys_from_mapping(mapping):
+    keys = []
+    for k, v in mapping.items():
+        # 섹션(dict)면 내부도 탐색
+        if isinstance(v, dict):
+            keys.extend(_collect_youtube_keys_from_mapping(v))
+        else:
+            if isinstance(v, str):
+                # 단일 키: YOUTUBE_API_KEY, YOUTUBE_API_KEY_1/2/3...
+                if str(k).upper().startswith("YOUTUBE_API_KEY"):
+                    if v.strip():
+                        keys.append(v.strip())
+                # 콤마리스트: YOUTUBE_API_KEYS = "k1,k2,k3"
+                if str(k).upper() == "YOUTUBE_API_KEYS":
+                    parts = [p.strip() for p in v.split(",") if p.strip()]
+                    keys.extend(parts)
+    return keys
+
+# 1) Secrets에서 모으기 (최상위+섹션 재귀 탐색)
+keys = _collect_youtube_keys_from_mapping(dict(st.secrets))
+
+# 2) 환경변수에서도 예비로 모으기 (로컬/워크스페이스 대비)
+for env_k, env_v in os.environ.items():
+    if env_k.upper().startswith("YOUTUBE_API_KEY") and env_v.strip():
+        keys.append(env_v.strip())
+
+# 3) 중복 제거 및 정리
+seen = set()
+keys = [k for k in keys if not (k in seen or seen.add(k))]
+
 if not keys:
-    st.error("⚠️ API 키가 없습니다. App → Settings → Secrets 에 `YOUTUBE_API_KEY_1 = \"발급키\"` 를 넣어주세요.")
+    st.error(
+        "⚠️ API 키가 없습니다.\n"
+        "Settings → Secrets에 아래 형식 중 하나로 입력해 주세요.\n\n"
+        "① 단일:  YOUTUBE_API_KEY = \"발급키\"\n"
+        "② 복수:  YOUTUBE_API_KEY_1 = \"키1\"\n"
+        "          YOUTUBE_API_KEY_2 = \"키2\"\n"
+        "③ 리스트: YOUTUBE_API_KEYS = \"키1,키2,키3\"\n"
+        "④ 섹션:  [general]\\nYOUTUBE_API_KEY_1 = \"키1\"  (섹션 내부도 자동 탐색합니다)"
+    )
     st.stop()
 
-#랜덤 선택 (혹은 라운드로빈도 가능)
-import random
-API_KEY = random.choice(keys)
+# 4) 라운드로빈 선택 (세션마다 고르게 분산)
+if "api_key_cycle" not in st.session_state:
+    st.session_state["api_key_cycle"] = cycle(keys)
+
+API_KEY = next(st.session_state["api_key_cycle"])
 
 KST = ZoneInfo("Asia/Seoul")
 PT  = ZoneInfo("America/Los_Angeles")
