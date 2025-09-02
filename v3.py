@@ -605,7 +605,7 @@ mode_map = {"자동(구글→네이버)":"auto","구글만":"google","네이버�
 source_mode = mode_map[trend_source]
 
 # 트렌드 키워드
-g_kw, g_src, g_logs = google_trends_top(source_mode=source_mode, debug_log=trend_debug)
+g_kw, g_src, g_logs = google_trends_top(source_mode=source_mode)
 st.caption(f"트렌드 소스: {g_src if g_kw else 'Unavailable'} · 키워드 {len(g_kw)}개 · 모드={trend_source}")
 
 # ───────── 쿼터/리셋 정보 ─────────
@@ -641,13 +641,7 @@ with left:
 
 with right:
     st.subheader("🌐 Trends Top10")
-    if trend_debug:
-        with st.expander("🔎 트렌드 디버그 로그/원본"):
-            st.write(f"source_mode={source_mode}, src={g_src}")
-            st.write(f"raw keywords({len(g_kw)}):", g_kw)
-            if g_logs:
-                st.code("\n".join(g_logs[-40:]), language="text")
-
+    
     if g_kw:
         df_g = pd.DataFrame({"keyword": g_kw}).dropna()
         df_g["keyword"] = df_g["keyword"].astype(str).str.strip()
