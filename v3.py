@@ -284,6 +284,7 @@ _WEAK_LAST_TOKENS = {"차림","열람","논쟁","논란","발언","발표","입�
 _BANNED_PHRASES = {"무슨 일","입 닥치고","석방하라","석방 하라","내 정보"}
 _BANNED_TOKENS  = {"석방하라","하라"}
 _TOKEN_PAT = r"[0-9A-Za-z가-힣]+"
+ADVERB_BAD_START = {"가만히","막","그냥","정말","매우","너무","아주","꼭","혹시","아마","아예"}
 
 PHRASE_SIM_STOP = {
     "발견","공개","사진","영상","입고","착용","총상","숨진","숨져","사망","사람","채","관련","등","등의",
@@ -318,7 +319,7 @@ def _is_bad_phrase(ph: str) -> bool:
     ws = ph.split()
     if len(ws) < 2:
         return True
-    if ws[0] in _BAD_START:
+    if ws[0] in _BAD_START or ws[0] in ADVERB_BAD_START::
         return True
     if any(t in _BANNED_TOKENS or t.endswith("하라") for t in ws):
         return True
@@ -345,10 +346,16 @@ def _is_bad_phrase(ph: str) -> bool:
     return False
 
 def _normalize_phrase(ph: str) -> str:
-    ws = ph.split()
+    ws = [w for w in ph.split() if w]
+    if not ws:
+        return ""
+    # 마지막 토큰 조사 제거
     ws[-1] = _strip_postposition(ws[-1])
-    if len(ws)==2:
-        return " ".join(sorted(ws))
+    # 중간 토큰도 조사성 꼬리 제거(안전)
+    ws = [_strip_postposition(w) for w in ws]
+    # 의미 약한 토큰 제거
+    ws = [w for w in ws if w not in TREND_STOPWORDS and w not in _WEAK_LAST_TOKENS]
+    # ★ 순서 유지! 재정렬하지 않음
     return " ".join(ws)
 
 def _phrase_signature(ph: str) -> List[str]:
