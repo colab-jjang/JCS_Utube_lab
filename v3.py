@@ -574,10 +574,6 @@ with st.sidebar:
     show_speed_cols = st.checkbox("상승속도/경과시간 컬럼 표시", value=True)
 
     trend_source = st.radio("트렌드 소스 선택", ["자동(구글→네이버)", "구글만", "네이버만", "유튜브만"], index=0)
-    trend_debug = st.checkbox("트렌드 디버그 보기", value=False)
-
-    # ✅ 빈결과 시 외부 검색(쿼터 사용) 허용
-    allow_live_search = st.checkbox("빈결과일 때 외부 검색(유튜브 API 사용)", value=False)
 
     run = st.button("새로고침(데이터 수집)")
 
