@@ -754,13 +754,6 @@ if pick_kw.strip():
     mask = df_show["title"].str.contains(pat) | df_show["description"].str.contains(pat)
     df_show = df_show[mask]
 
-    # ✅ 빈결과면: 외부 라이브 검색(옵션 ON일 때)
-    if df_show.empty and allow_live_search:
-        df_live = live_search_youtube(pick_kw.strip(), max_items=20)
-        if not df_live.empty:
-            st.info("수집 풀에 없어 **외부 실시간 검색 결과**를 보여줍니다. (쿼터 사용)")
-            df_show = df_live
-
 cols = ["title","view_count","length","channel","url","published_at_kst"]
 if show_speed_cols:
     cols = ["title","view_count","views_per_hour","hours_since_upload","length","channel","url","published_at_kst"]
