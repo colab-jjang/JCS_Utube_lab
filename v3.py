@@ -288,7 +288,20 @@ with left:
 with right:
     st.subheader("🎬 숏츠 리스트")
     cols = ["title","view_count","length","channel","like_count","comment_count","url","published_at_kst"]
-    df_show = df_pool[cols]
+
+    df_show = df_pool.copy()
+    # 안전 처리: 없는 컬럼은 NaN/빈 문자열로 채워주기
+    safe_cols = [c for c in cols if c in df_show.columns]
+    for c in cols:
+        if c not in df_show.columns:
+            if c in ("view_count","like_count","comment_count"):
+                df_show[c] = 0
+            elif c == "length":
+                df_show[c] = ""
+            else:
+                df_show[c] = ""
+    df_show = df_show[cols]  # 순서 보장
+
     st.dataframe(df_show, use_container_width=True, hide_index=True)
     st.download_button("CSV 다운로드",
         df_show.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
