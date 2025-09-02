@@ -26,7 +26,21 @@ SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 DAILY_QUOTA = 10_000
 
-# ───────── 쿼터 파일 ─────────
+# ───────── 공통 블랙리스트(중앙 관리) ─────────
+# 1) 정확 매치로 차단(그대로 나오면 무조건 제외)
+COMMON_BANNED_EXACT = {
+    "석방하라", "석방 하라", "입 닥치고",
+}
+# 2) 부분 포함되면 차단(문장/명사구/토큰 안에 포함만 되어도 컷)
+COMMON_BANNED_SUBSTR = {
+    "석방하라",
+}
+# 3) 토큰 단위로 나오면 차단(토큰화 했을 때 한 단어로 등장 시 컷)
+COMMON_BANNED_TOKENS = {
+    "석방하라", "하라",
+}
+
+# ───────── 쿼터(일일) 영구 누적 저장: 파일 방식 ─────────
 DATA_DIR   = Path(".")
 QUOTA_FILE = DATA_DIR / "quota_usage.json"
 
@@ -175,13 +189,13 @@ def fetch_shorts_df(pages:int=1, bucket:int=0):
         df["views_per_hour"] = []
     return df
 
-# ───────── 유튜브 키워드(단어) ─────────
+# ───────── 유튜브 텍스트 토크나이저(키워드) + 공통 블랙리스트 적용 ─────────
 STOPWORDS = set("""
 그리고 그러나 그래서 또한 또는 및 먼저 지금 바로 매우 정말 그냥 너무 보다 보다도 때는 라는 이런 저런 그런
 합니다 했다 했다가 하는 하고 하며 하면 대한 위해 에서 에게 에도 에는 으로 로 를 은 는 이 가 도 의 에 와 과
 """.split())
 STOPWORDS |= {"속보","브리핑","단독","현장","영상","뉴스","기자","리포트","라이브","연합뉴스",
-              "채널","구독","대통령","유튜브","정치","홈페이지","대한민국","금지","시사","모아","답해주세요","다큐멘터리"}
+              "채널","구독","대통령","유튜브","정치","홈페이지","대한민국","금지","시사","모아","답해주세요","다큐디깅","나는 절로"}
 STOPWORDS |= {"http","https","www","com","co","kr","net","org",
               "youtu","youtube","be","shorts","watch","tv",
               "news","live","breaking","official","channel",
@@ -199,6 +213,14 @@ def strip_korean_suffixes(t: str) -> str:
             t = t[:-len(j)]
     return t
 
+def _contains_common_banned(s: str) -> bool:
+    """문자열 전체(명사구/키워드)에 공통 금칙(정확/부분) 적용"""
+    if s in COMMON_BANNED_EXACT:
+        return True
+    if any(sub in s for sub in COMMON_BANNED_SUBSTR):
+        return True
+    return False
+
 def tokenize_ko_en(text: str):
     text = str(text or "")
     text = re.sub(r"https?://\S+", " ", text)
@@ -210,6 +232,10 @@ def tokenize_ko_en(text: str):
     for t in raw:
         if not t or t.isdigit(): 
             continue
+        if _contains_common_banned(t):      # ← 공통 금칙(토큰 단위)
+            continue
+        if t in COMMON_BANNED_TOKENS:       # ← 공통 금칙 토큰
+            continue
         if re.fullmatch(r"[가-힣]+", t):
             t = strip_korean_suffixes(t)
         if t in STOPWORDS or len(t) < 2:
@@ -218,7 +244,7 @@ def tokenize_ko_en(text: str):
             continue
         if t.endswith("tv") and len(t) > 2:
             t = t[:-2]
-            if t in STOPWORDS or len(t) < 2:
+            if t in STOPWORDS or len(t) < 2 or _contains_common_banned(t):
                 continue
         out.append(t)
     return out
@@ -227,17 +253,23 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     corpus = (df["title"].fillna("") + " " + df["description"].fillna("")).tolist()
     cnt = Counter()
     for line in corpus:
+        # 라인 전체에도 공통 금칙(부분/정확) 적용
+        if _contains_common_banned(line.lower()):
+            continue
         cnt.update(tokenize_ko_en(line))
-    items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
+    # 집계 후, 키워드 문자열에도 공통 금칙 확인(이중 안전장치)
+    items = [(w,c) for w,c in cnt.most_common()
+             if not re.fullmatch(r"\d+", w)
+             and not _contains_common_banned(w)]
     return items[:topk]
 
-# ───────── 트렌드(구글/네이버)용 규칙 ─────────
+# ───────── Trends 전용 필터/정규화 규칙(공통 블랙리스트 함께 사용) ─────────
 TREND_STOPWORDS = {
     "http","https","www","com","co","kr","net","org","youtube","shorts","watch","tv","cctv","sns",
     "기사","단독","속보","영상","전문","라이브","기자","보도","헤드라인","데스크","전체보기","더보기",
     "오늘","어제","금일","최근","방금","방금전","아침","오전","오후","밤","새벽",
     "관련","논란","논쟁","상황","사건","이슈","분석","전망","브리핑","발언","발표","입장",
-    "서울","한국","국내","해외","정부","여당","야당","당국","위원장","장관","대통령","총리","국회","나는 절로"
+    "서울","한국","국내","해외","정부","여당","야당","당국","위원장","장관","대통령","총리","국회",
 }
 _BAD_START = {"무슨","어떤","왜","어째서","어디","누가","누구","언제","얼마나","이번","지난","현직","전직","현재","향후","내년","올해"}
 _POSTPOSITION_SUFFIXES = ("으로","로","에게","에서","보다","까지","부터","만","조차","라도","처럼","뿐","께","에","와","과","랑","하고","밖에","이라","라","이라도","은","는","이","가")
@@ -245,26 +277,7 @@ _BAD_END_VERB_PAT = re.compile(r"(하라|해라|해주세요|합시다|하자|�
 _BAD_END_QUESTION_PAT = re.compile(r"(까|나|냐|일까|을까|였나|였을까|나요|\?$)$")
 _BAD_END_INTERROGATIVE = {"어디","누구","누가","무엇","뭐","왜","언제","얼마나"}
 _WEAK_LAST_TOKENS = {"차림","열람","논쟁","논란","발언","발표","입장","사실","상황","사건","문제","의혹","의심","행위","제기","제안","요청","요구","우려","가능성","목소리","후","전","안","밖","속","중","쪽","내","외","등","건","부분","측면","자료"}
-_BANNED_PHRASES = {"무슨 일","입 닥치고","석방하라","석방 하라"}
-_BANNED_TOKENS  = {"석방하라","하라"}
 _TOKEN_PAT = r"[0-9A-Za-z가-힣]+"
-
-# ───────── 전역 제외(유튜브/트렌드 공통) ─────────
-BANNED_EXACT = {"석방하라", "석방 하라", "나는 질문"}
-BANNED_SUBSTR = {"석방하라"}  # 포함만 돼도 제외
-
-def _drop_banned_keywords(words: list[str]) -> list[str]:
-    out = []
-    for w in words:
-        w1 = (w or "").strip()
-        if not w1: 
-            continue
-        if w1 in BANNED_EXACT: 
-            continue
-        if any(sub in w1 for sub in BANNED_SUBSTR):
-            continue
-        out.append(w1)
-    return out
 
 def _strip_postposition(token: str) -> str:
     for suf in _POSTPOSITION_SUFFIXES:
@@ -282,19 +295,21 @@ def _tok_line_for_trends(s: str) -> list[str]:
     for t in toks:
         if t.isdigit(): continue
         if t in TREND_STOPWORDS: continue
+        if _contains_common_banned(t): continue            # ← 공통 금칙(토큰)
+        if t in COMMON_BANNED_TOKENS: continue            # ← 공통 금칙 토큰
         if re.fullmatch(r"[a-z]+", t) and len(t)<=2: continue
         out.append(t)
     return out
 
 def _is_bad_phrase(ph: str) -> bool:
-    if ph in _BANNED_PHRASES: 
+    if _contains_common_banned(ph):               # ← 공통 금칙(문장/명사구)
         return True
     ws = ph.split()
     if len(ws) < 2:
         return True
     if ws[0] in _BAD_START:
         return True
-    if any(t in _BANNED_TOKENS or t.endswith("하라") for t in ws):
+    if any(t in COMMON_BANNED_TOKENS or t.endswith("하라") for t in ws):
         return True
     last_raw = ws[-1]
     last = _strip_postposition(last_raw)
@@ -329,13 +344,17 @@ def _extract_top_phrases(lines: list[str], topk: int = 10) -> list[str]:
     docs = []
     for x in lines:
         x = re.sub(r"\s+"," ", (x or "").replace("\u200b"," ")).strip()
+        if _contains_common_banned(x.lower()):    # ← 공통 금칙(원문 레벨)
+            continue
         if x and len(x) > 4:
             toks = _tok_line_for_trends(x)
             if len(toks) >= 2:
                 docs.append(" ".join(toks))
     if not docs:
         return []
-    vec = TfidfVectorizer(tokenizer=lambda s: s.split(), token_pattern=None, lowercase=False, ngram_range=(2,3), min_df=2)
+    vec = TfidfVectorizer(tokenizer=lambda s: s.split(),
+                          token_pattern=None, lowercase=False,
+                          ngram_range=(2,3), min_df=2)
     X = vec.fit_transform(docs)
     ngrams = vec.get_feature_names_out()
     scores = np.asarray(X.sum(axis=0)).ravel()
@@ -352,7 +371,9 @@ def _extract_top_phrases(lines: list[str], topk: int = 10) -> list[str]:
         if norm not in best or sc > best[norm]:
             best[norm] = sc
     ranked = sorted(best.items(), key=lambda x: x[1], reverse=True)
-    return [p for p,_ in ranked[:topk]]
+    # 최종 반환 시에도 공통 금칙 한 번 더 체크
+    out = [p for p,_ in ranked if not _contains_common_banned(p)]
+    return out[:topk]
 
 # ───────── Naver 트렌드(인기/정치 헤드라인) → 핵심 명사구 Top10 ─────────
 def _fetch_trends_naver(add_log=None) -> tuple[list[str], str]:
@@ -389,46 +410,6 @@ def _fetch_trends_naver(add_log=None) -> tuple[list[str], str]:
     phrases = _extract_top_phrases(titles, topk=10)
     return phrases, ("naver" if phrases else "none")
 
-# ───────── Google Trends (RSS/HTML fallback) ─────────
-def _google_try(add_log=None):
-    headers = {"User-Agent": "Mozilla/5.0"}
-    bases = ["https://trends.google.com", "https://trends.google.co.kr"]
-
-    # (A) Daily RSS
-    for base in bases:
-        try:
-            url = f"{base}/trends/trendingsearches/daily/rss?geo=KR&hl=ko"
-            r = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
-            if add_log: add_log(f"[google rss] {r.status_code} {r.url}")
-            r.raise_for_status()
-            root = ET.fromstring(r.content)
-            titles = []
-            for item in root.findall(".//item"):
-                t = (item.findtext("title") or "").strip()
-                if t: titles.append(t)
-                if len(titles) >= 10: break
-            titles = [p for p in titles if not _is_bad_phrase(p)]
-            if titles:
-                return titles, "google-rss"
-        except Exception as e:
-            if add_log: add_log(f"[google rss] error: {e}")
-
-    # (B) HTML fallback
-    try:
-        url = "https://trends.google.com/trends/trendingsearches/daily?geo=KR&hl=ko"
-        r = requests.get(url, headers=headers, timeout=15)
-        if add_log: add_log(f"[google html] {r.status_code} {r.url}")
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "lxml")
-        titles = [a.get_text(strip=True) for a in soup.select("div.feed-item h2 a")]
-        titles = [p for p in titles if not _is_bad_phrase(p)]
-        if titles:
-            return titles[:10], "google-html"
-    except Exception as e:
-        if add_log: add_log(f"[google html] error: {e}")
-
-    return [], "none"
-
 # ───────── 트렌드 소스 (구글/네이버/유튜브) ─────────
 @st.cache_data(show_spinner=False, ttl=900)
 def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
@@ -440,16 +421,53 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
     def add(msg):
         if debug_log: logs.append(str(msg))
 
+    def _google_try():
+        headers = {"User-Agent": "Mozilla/5.0"}
+        bases = ["https://trends.google.com", "https://trends.google.co.kr"]
+
+        # A. Daily RSS
+        for base in bases:
+            try:
+                url = f"{base}/trends/trendingsearches/daily/rss?geo=KR&hl=ko"
+                r = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+                add(f"[google rss] {r.status_code} {r.url}")
+                r.raise_for_status()
+                root = ET.fromstring(r.content)
+                titles = []
+                for item in root.findall(".//item"):
+                    t = (item.findtext("title") or "").strip()
+                    if t: titles.append(t)
+                    if len(titles) >= 10: break
+                titles = [p for p in titles if not _contains_common_banned(p)]
+                if titles: return titles, "google-rss"
+            except Exception as e:
+                add(f"[google rss] error: {e}")
+
+        # B. HTML fallback
+        try:
+            url = "https://trends.google.com/trends/trendingsearches/daily?geo=KR&hl=ko"
+            r = requests.get(url, headers=headers, timeout=15)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "lxml")
+            titles = [a.get_text(strip=True) for a in soup.select("div.feed-item h2 a")]
+            titles = [p for p in titles if not _contains_common_banned(p)]
+            if titles:
+                return titles[:10], "google-html"
+        except Exception as e:
+            add(f"[google html] error: {e}")
+
+        return [], "none"
+
     def _youtube_fallback():
         try:
             words = st.session_state.get("yt_kw_words", [])
-            words = [w for w in words if not _is_bad_phrase(w)]
+            words = [w for w in words if not _contains_common_banned(w)]
             return (words[:10], "youtube-fallback") if words else ([], "none")
         except Exception:
             return [], "none"
 
     if source_mode == "google":
-        kws, src = _google_try(add)
+        kws, src = _google_try()
         return kws, src, logs
     if source_mode == "naver":
         kws, src = _fetch_trends_naver(add)
@@ -458,8 +476,8 @@ def google_trends_top(debug_log: bool = False, source_mode: str = "auto"):
         kws, src = _youtube_fallback()
         return kws, src, logs
 
-    # auto: google → naver → youtube
-    kws, src = _google_try(add)
+    # auto
+    kws, src = _google_try()
     if not kws:
         kws, src = _fetch_trends_naver(add)
     if not kws:
@@ -487,7 +505,6 @@ with st.sidebar:
         ["자동(구글→네이버)", "구글만", "네이버만", "유튜브만"],
         index=0
     )
-    trend_debug = st.checkbox("트렌드 디버그 보기", value=False)
 
     run = st.button("새로고침(데이터 수집)")
 
@@ -504,10 +521,9 @@ ascending_flag = (sort_order == "오름차순")
 base_pool_n = max(50, len(df))
 df_pool = df.sort_values(base_col, ascending=ascending_flag, ignore_index=True).head(base_pool_n)
 
-# 유튜브 키워드 Top10 (전역 제외 적용)
-yt_kw = top_keywords_from_df(df_pool, topk=30)  # 넉넉히 뽑고
+# 유튜브 키워드 Top10 (공통 블랙리스트 반영됨)
+yt_kw = top_keywords_from_df(df_pool, topk=10)
 yt_kw_words = [w for w, _ in yt_kw]
-yt_kw_words = _drop_banned_keywords(yt_kw_words)[:10]
 st.session_state["yt_kw_words"] = yt_kw_words  # 유튜브 fallback용
 
 # 트렌드 소스 모드
@@ -519,10 +535,8 @@ mode_map = {
 }
 source_mode = mode_map[trend_source]
 
-# 트렌드 키워드 (전역 제외 추가 적용)
-g_kw, g_src, g_logs = google_trends_top(source_mode=source_mode, debug_log=trend_debug)
-g_kw = _drop_banned_keywords(g_kw)
-
+# 트렌드 키워드(공통 블랙리스트 반영)
+g_kw, g_src, g_logs = google_trends_top(source_mode=source_mode, debug_log=False)
 st.caption(f"트렌드 소스: {g_src if g_kw else 'Unavailable'} · 키워드 {len(g_kw)}개 · 모드={trend_source}")
 
 # ───────── 쿼터/리셋 정보 ─────────
@@ -545,31 +559,24 @@ st.caption("※ YouTube Data API 일일 쿼터는 매일 PT(미국 서부) 자�
 left, right = st.columns(2)
 with left:
     st.subheader("📈 유튜브(48h·상위 풀) 키워드 Top10")
-    if yt_kw_words:
-        df_kw = pd.DataFrame({"keyword": yt_kw_words})
-        df_kw["count"] = (len(df_kw) + 1) - np.arange(1, len(df_kw)+1)  # 순위형 점수
-        st.bar_chart(df_kw.set_index("keyword")[["count"]])
-        st.dataframe(df_kw, use_container_width=True, hide_index=True)
+    if yt_kw:
+        df_kw = pd.DataFrame(yt_kw, columns=["keyword","count"])
+        df_kw_sorted = df_kw.sort_values("count", ascending=ascending_flag)
+        st.bar_chart(df_kw_sorted.set_index("keyword")["count"])
+        st.dataframe(df_kw_sorted, use_container_width=True, hide_index=True)
         st.download_button("유튜브 키워드 CSV",
-                           df_kw.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
+                           df_kw_sorted.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"),
                            file_name="yt_keywords_top10.csv", mime="text/csv")
     else:
         st.info("키워드를 추출할 데이터가 부족합니다. 수집 규모/페이지를 늘려보세요.")
 
 with right:
     st.subheader("🌐 Trends Top10")
-    if trend_debug:
-        with st.expander("🔎 트렌드 디버그 로그/원본"):
-            st.write(f"source_mode={source_mode}, src={g_src}")
-            st.write(f"raw keywords({len(g_kw)}):", g_kw)
-            if g_logs:
-                st.code("\n".join(g_logs[-40:]), language="text")
-
     if g_kw:
         df_g = pd.DataFrame({"keyword": g_kw}).dropna()
         df_g["keyword"] = df_g["keyword"].astype(str).str.strip()
         df_g = df_g[df_g["keyword"] != ""].drop_duplicates("keyword").head(10)
-        if len(df_g) >= 1:
+        if len(df_g):
             df_g["rank"]  = np.arange(1, len(df_g) + 1, dtype=int)
             df_g["score"] = (len(df_g) + 1) - df_g["rank"]  # 1등=최대
             st.bar_chart(df_g.set_index("keyword")[["score"]])
@@ -581,9 +588,9 @@ with right:
                 mime="text/csv"
             )
         else:
-            st.info("트렌드 키워드가 비어 있습니다. (중복/공백 제거 후 0개)")
+            st.info("트렌드 키워드가 비었습니다. (중복/공백 제거 후 0개)")
     else:
-        st.info("선택한 소스에서 트렌드 키워드를 가져오지 못했습니다. (모드를 바꾸거나 디버그로 로그를 확인하세요)")
+        st.info("선택한 소스에서 트렌드 키워드를 가져오지 못했습니다. (모드를 바꿔보세요)")
 
 # ───────── 교집합 ─────────
 def _norm(s: str) -> str:
@@ -635,5 +642,6 @@ st.markdown("""
 - 유튜브 API는 업로더 국가를 확정 제공하지 않습니다. 본 앱은 `regionCode=KR`, `relevanceLanguage=ko`로 한국 우선 결과를 가져옵니다.
 - 쿼터 비용(추정): `search.list = 100/호출`, `videos.list = 1/호출(50개 단위)`. 수집 규모가 커질수록 비용이 늘어납니다.
 - 캐시 TTL을 길게 설정하면 쿼터 사용량을 크게 줄일 수 있습니다.
-- 트렌드 소스는 *Google(RSS/HTML)* 실패 시 *네이버 인기뉴스*로 자동 대체됩니다.
+- 트렌드 소스는 *구글(RSS→HTML)* 실패 시 *네이버 인기뉴스*로 자동 대체(“자동” 모드)됩니다.
+- 🔒 공통 블랙리스트는 코드 상단 `COMMON_BANNED_*`에서 한 번만 고치면 유튜브/트렌드 모두에 즉시 반영됩니다.
 """)
