@@ -621,6 +621,22 @@ source_mode = mode_map[trend_source]
 g_kw, g_src, g_logs = google_trends_top(source_mode=source_mode, debug_log=trend_debug)
 st.caption(f"트렌드 소스: {g_src if g_kw else 'Unavailable'} · 키워드 {len(g_kw)}개 · 모드={trend_source}")
 
+# ───────── 쿼터/리셋 정보 ─────────
+now_pt = dt.datetime.now(PT)
+reset_pt = (now_pt + dt.timedelta(days=1)).replace(hour=0,minute=0,second=0,microsecond=0)
+remain_td = reset_pt - now_pt
+used = st.session_state.get("quota_used", 0)
+remaining = max(0, DAILY_QUOTA - used)
+pct = min(1.0, used / DAILY_QUOTA)
+
+quota1, quota2 = st.columns([2,1])
+with quota1:
+    st.subheader("🔋 오늘 쿼터(추정)")
+    st.progress(pct, text=f"사용 {used} / {DAILY_QUOTA}  (남은 {remaining})")
+with quota2:
+    st.metric("남은 쿼터(추정)", value=f"{remaining:,}", delta=f"리셋까지 {str(remain_td).split('.')[0]}")
+st.caption("※ YouTube Data API 일일 쿼터는 PT 자정(=KST 오후 4~5시경)에 리셋됩니다.")
+
 # ───────── 상단 보드 ─────────
 left, right = st.columns(2)
 with left:
