@@ -200,6 +200,7 @@ TEMPORAL_BAD_PAT = re.compile(
     )""",
     re.X | re.I
 )
+
 def _contains_common_banned(s: str) -> bool:
     s = s.lower()
     if COMMON_BANNED_PAT.search(s): return True
@@ -241,14 +242,18 @@ def tokenize_ko_en(text: str):
     raw = re.findall(r"[0-9A-Za-z가-힣]+", text.lower())
     out = []
     for t in raw:
-        if not t or t.isdigit(): continue
+        if not t or t.isdigit():
+            continue
         if re.fullmatch(r"[가-힣]+", t):
             t = strip_korean_suffixes(t)
-        if t in STOPWORDS or len(t) < 2: continue
-        if re.fullmatch(r"[a-z]+", t) and len(t) <= 2: continue
+        if t in STOPWORDS or len(t) < 2:
+            continue
+        if re.fullmatch(r"[a-z]+", t) and len(t) <= 2:
+            continue
         if t.endswith("tv") and len(t) > 2:
             t = t[:-2]
-            if t in STOPWORDS or len(t) < 2: continue
+            if t in STOPWORDS or len(t) < 2:
+                continue
         out.append(t)
     return out
 
@@ -259,8 +264,7 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
         cnt.update(tokenize_ko_en(line))
     items = [(w,c) for w,c in cnt.most_common() if not re.fullmatch(r"\d+", w)]
     words = [w for w,_ in items[:topk*3]]
-    words = _postprocess_phrases(words, topk=topk)  # 병합 강화
-    # count 재구성
+    words = _postprocess_phrases(words, topk=topk)
     cnt2 = Counter()
     for line in corpus:
         toks = tokenize_ko_en(line)
@@ -270,7 +274,7 @@ def top_keywords_from_df(df: pd.DataFrame, topk:int=10):
     final = [(w, cnt2[w]) for w in words]
     return final[:topk]
 
-# ───────── Trends 전용/병합 보강 ─────────
+# ───────── Trends 전용 규칙 ─────────
 TREND_STOPWORDS = COMMON_STOPWORDS.copy()
 _BAD_START = {"무슨","어떤","왜","어째서","어디","누가","누구","언제","얼마나","이번","지난","현직","전직","현재","향후","내년","올해"}
 _POSTPOSITION_SUFFIXES = ("으로","로","에게","에서","보다","까지","부터","만","조차","라도","처럼","뿐","께","에","와","과","랑","하고","밖에","이라","라","이라도","은","는","이","가","채","만에")
@@ -282,29 +286,10 @@ _BANNED_PHRASES = {"무슨 일","입 닥치고","석방하라","석방 하라"}
 _BANNED_TOKENS  = {"석방하라","하라"}
 _TOKEN_PAT = r"[0-9A-Za-z가-힣]+"
 
-# 사건·장소 핵심 단어(동의어 정규화)
-PHRASE_CANON_MAP = {
-    # 사망/피격 계열
-    "숨진":"사망","숨져":"사망","사망":"사망","사망자":"사망",
-    "총상":"총격","피격":"총격","총격":"총격","총기":"총격",
-    "실족":"추락","추락":"추락",
-    # 군/직급
-    "육군대위":"육군","대위":"대위","육군":"육군",
-    # 용의/피의
-    "용의자":"용의자","피의자":"용의자",
-    # 장소 표기 통일(예시는 소수만—더 추가 가능)
-    "수성못":"수성못","대구":"대구",
-}
-
-# 유사 구 통합에서 무시할 꼬리/형식 토큰
 PHRASE_SIM_STOP = {
     "발견","공개","사진","영상","입고","착용","총상","숨진","숨져","사망","사람","채","관련","등","등의",
     "사실","상황","사건","문제","논란","논쟁","발언","입장","보도","당시","현장","추정","추락","폭행","체포","구속"
 }
-
-# 사건·장소 어휘(둘 다 포함되면 가중 합침)
-EVENT_LEX = {"사망","총격","추락","폭행","실종","실족","피격","화재","폭발","납치","구속","체포"}
-PLACE_HINT = {"대구","부산","서울","인천","수성못","한강","지하철","학교","아파트","도로","고속도로","병원","군부대"}
 
 def _strip_postposition(token: str) -> str:
     for suf in _POSTPOSITION_SUFFIXES:
@@ -313,10 +298,6 @@ def _strip_postposition(token: str) -> str:
             if len(stem) >= 2:
                 return stem
     return token
-
-def _canon_token(t: str) -> str:
-    t = _strip_postposition(t)
-    return PHRASE_CANON_MAP.get(t, t)
 
 def _tok_line_for_trends(s: str) -> List[str]:
     if _contains_common_banned(s):
@@ -336,88 +317,74 @@ def _is_bad_phrase(ph: str) -> bool:
     if ph in _BANNED_PHRASES: 
         return True
     ws = ph.split()
-    if len(ws) < 2: return True
-    if ws[0] in _BAD_START: return True
-    if any(t in _BANNED_TOKENS or t.endswith("하라") for t in ws): return True
-    last_raw = ws[-1]; last = _strip_postposition(last_raw)
-    if last in _BAD_END_INTERROGATIVE: return True
-    if _BAD_END_VERB_PAT.search(last) or _BAD_END_QUESTION_PAT.search(last): return True
+    if len(ws) < 2:
+        return True
+    if ws[0] in _BAD_START:
+        return True
+    if any(t in _BANNED_TOKENS or t.endswith("하라") for t in ws):
+        return True
+    last_raw = ws[-1]
+    last = _strip_postposition(last_raw)
+    if last in _BAD_END_INTERROGATIVE: 
+        return True
+    if _BAD_END_VERB_PAT.search(last) or _BAD_END_QUESTION_PAT.search(last): 
+        return True
     for i, t in enumerate(ws[:-1]):
         if t == "수":
             nxt = ws[i+1] if i+1 < len(ws) else ""
-            if nxt.startswith(("있","없")): return True
-    if last in _WEAK_LAST_TOKENS: return True
+            if nxt.startswith(("있","없")): 
+                return True
+    if last in _WEAK_LAST_TOKENS: 
+        return True
     if len(ws)==2:
         w0 = ws[0]; w1 = last
         if (w0 in TREND_STOPWORDS or w1 in TREND_STOPWORDS or
             w0 in _BAD_START or w1 in _WEAK_LAST_TOKENS):
             return True
-    if re.search(r"(어|아)$", last): return True
+    if re.search(r"(어|아)$", last): 
+        return True
     return False
 
 def _normalize_phrase(ph: str) -> str:
     ws = ph.split()
-    ws = [_canon_token(w) for w in ws]
+    ws[-1] = _strip_postposition(ws[-1])
     if len(ws)==2:
         return " ".join(sorted(ws))
     return " ".join(ws)
 
 def _phrase_signature(ph: str) -> List[str]:
-    toks = [_canon_token(w) for w in re.findall(r"[0-9A-Za-z가-힣]+", ph.lower())]
+    toks = [_strip_postposition(w) for w in re.findall(r"[0-9A-Za-z가-힣]+", ph.lower())]
     core = []
     for t in toks:
-        if not t or t.isdigit(): continue
-        if t in COMMON_STOPWORDS or t in TREND_STOPWORDS or t in PHRASE_SIM_STOP: continue
-        if len(t) <= 1: continue
+        if not t or t.isdigit():
+            continue
+        if t in COMMON_STOPWORDS or t in TREND_STOPWORDS or t in PHRASE_SIM_STOP:
+            continue
+        if len(t) <= 1:
+            continue
         core.append(t)
-    # 정보량 높은 순(길이 우선) 상위만 유지
-    core = sorted(set(core), key=lambda x: (-len(x), x))[:4]
-    return core
-
-def _char_ngrams(s: str, n:int=3) -> Counter:
-    s = re.sub(r"\s+","", s)
-    return Counter([s[i:i+n] for i in range(max(0, len(s)-n+1))])
-
-def _cosine_sim(a: Counter, b: Counter) -> float:
-    if not a or not b: return 0.0
-    keys = set(a) | set(b)
-    va = np.array([a[k] for k in keys], dtype=float)
-    vb = np.array([b[k] for k in keys], dtype=float)
-    denom = (np.linalg.norm(va) * np.linalg.norm(vb))
-    return float(va.dot(vb) / denom) if denom else 0.0
+    core.sort(key=lambda x: (-len(x), x))
+    return core[:3]
 
 def _collapse_similar(ranked_pairs: List[Tuple[str,float]], topk: int) -> List[str]:
     kept: List[str] = []
-    used: List[Tuple[set, str, float, Counter]] = []  # (sig_set, phrase, score, charvec)
+    used: List[Tuple[set, str, float]] = []
 
     def jacc(a: set, b: set) -> float:
         if not a and not b: return 1.0
         return len(a & b) / max(1, len(a | b))
 
     for ph, sc in ranked_pairs:
-        sig_list = _phrase_signature(ph)
-        sig = set(sig_list)
+        sig = set(_phrase_signature(ph))
         if not sig:
             continue
 
-        ch = _char_ngrams(ph)
-
-        # 특수규칙: 장소 + 사건 단어 동시 포함 시 더 적극적으로 병합
-        has_event = any(t in EVENT_LEX for t in sig)
-        has_place = any(t in PLACE_HINT for t in sig)
-
         dedup = False
-        for s, _ph, _sc, _ch in used:
-            # 1) 정확/부분 포함
+        for s, _ph, _sc in used:
             if sig == s or sig.issubset(s) or s.issubset(sig):
                 dedup = True; break
-            # 2) Jaccard
-            if jacc(sig, s) >= (0.6 if (has_event and has_place) else 0.7):
+            if jacc(sig, s) >= 0.6:
                 dedup = True; break
-            # 3) 3-그램 코사인
-            if _cosine_sim(ch, _ch) >= (0.75 if (has_event and has_place) else 0.82):
-                dedup = True; break
-            # 4) 공백무시 부분포함
             a = re.sub(r"\s+","", ph)
             b = re.sub(r"\s+","", _ph)
             if a in b or b in a:
@@ -425,7 +392,7 @@ def _collapse_similar(ranked_pairs: List[Tuple[str,float]], topk: int) -> List[s
 
         if not dedup:
             kept.append(ph)
-            used.append((sig, ph, sc, ch))
+            used.append((sig, ph, sc))
         if len(kept) >= topk:
             break
 
@@ -435,23 +402,24 @@ def _postprocess_phrases(candidates: List[str], topk: int = 10) -> List[str]:
     cand = [c for c in candidates if not _contains_common_banned(str(c))]
     cand = [re.sub(r"\s+"," ", str(x)).strip() for x in cand if str(x).strip()]
     seen = set(); cand = [x for x in cand if not (x in seen or seen.add(x))]
-    if not cand: return []
-    pairs = [( _normalize_phrase(c), float(len(c)) ) for c in cand]
-    ranked_pairs = sorted(pairs, key=lambda x: x[1], reverse=True)
-    merged = _collapse_similar(ranked_pairs, topk=topk)
+    if not cand:
+        return []
+    pairs = [(c, float(len(c))) for c in cand]
+    merged = _collapse_similar(pairs, topk=topk)
     return merged
 
 def _extract_top_phrases(lines: List[str], topk: int = 10) -> List[str]:
     docs = []
     for x in lines:
         x = re.sub(r"\s+"," ", (x or "").replace("\u200b"," ")).strip()
-        if _contains_common_banned(x): continue
+        if _contains_common_banned(x):
+            continue
         if x and len(x) > 4:
             toks = _tok_line_for_trends(x)
             if len(toks) >= 2:
                 docs.append(" ".join(toks))
-    if not docs: return []
-
+    if not docs:
+        return []
     vec = TfidfVectorizer(
         tokenizer=lambda s: s.split(),
         token_pattern=None, lowercase=False,
@@ -463,11 +431,13 @@ def _extract_top_phrases(lines: List[str], topk: int = 10) -> List[str]:
 
     cand = []
     for ph, sc in zip(ngrams, scores):
-        if _is_bad_phrase(ph): continue
+        if _is_bad_phrase(ph):
+            continue
         norm = _normalize_phrase(ph)
         cand.append((norm, float(sc)))
 
-    if not cand: return []
+    if not cand:
+        return []
 
     ranked_pairs = sorted(cand, key=lambda x: x[1], reverse=True)
     return _collapse_similar(ranked_pairs, topk)
@@ -606,6 +576,9 @@ with st.sidebar:
     trend_source = st.radio("트렌드 소스 선택", ["자동(구글→네이버)", "구글만", "네이버만", "유튜브만"], index=0)
     trend_debug = st.checkbox("트렌드 디버그 보기", value=False)
 
+    # ✅ 빈결과 시 외부 검색(쿼터 사용) 허용
+    allow_live_search = st.checkbox("빈결과일 때 외부 검색(유튜브 API 사용)", value=False)
+
     run = st.button("새로고침(데이터 수집)")
 
 bucket = int(time.time() // ttl_sec)
@@ -704,10 +677,10 @@ def _norm(s: str) -> str:
     s = re.sub(r"[^\w가-힣]", "", s)
     return s
 
-yt_norm = [_norm(w) for w in [w for w,_ in yt_kw]]
+yt_norm = [_norm(w) for w in yt_kw_words]
 g_norm  = [_norm(g) for g in (g_kw or [])]
 hot = []
-for raw_y, y in zip([w for w,_ in yt_kw], yt_norm):
+for raw_y, y in zip(yt_kw_words, yt_norm):
     for g in g_norm:
         if y and g and (y in g or g in y):
             hot.append(raw_y); break
@@ -717,9 +690,66 @@ hot_intersection = [x for x in hot if not (x in _seen or _seen.add(x))]
 st.subheader("🔥 교집합(둘 다 뜨는 키워드)")
 st.write(", ".join(f"`{w}`" for w in hot_intersection) if hot_intersection else "현재 교집합 키워드가 없습니다.")
 
+# ───────── 라이브 검색 (빈결과 시 즉시 검색) ─────────
+def live_search_youtube(q: str, max_items: int = 20) -> pd.DataFrame:
+    """
+    df_pool에 결과가 없을 때, 같은 48h 창으로 유튜브 API를 즉시 검색해 가져옴.
+    search.list(100) + videos.list(1) → 쿼터 사용.
+    """
+    if not q.strip():
+        return pd.DataFrame()
+    start_iso, end_iso, _ = kst_window_last_48h()
+
+    # 1) search.list
+    params = {
+        "key": API_KEY, "part": "snippet", "type":"video", "order":"date",
+        "publishedAfter": start_iso, "publishedBefore": end_iso,
+        "maxResults": min(50, max_items), "videoDuration":"short",
+        "regionCode":"KR", "relevanceLanguage":"ko", "safeSearch":"moderate",
+        "q": q.strip(),
+    }
+    data = api_get(SEARCH_URL, params, cost=100)
+    ids = [it.get("id",{}).get("videoId") for it in data.get("items",[]) if it.get("id",{}).get("videoId")]
+    ids = list(dict.fromkeys(ids))[:max_items]
+    if not ids:
+        return pd.DataFrame()
+
+    # 2) videos.list
+    params = {"key": API_KEY, "part": "snippet,contentDetails,statistics", "id": ",".join(ids)}
+    data = api_get(VIDEOS_URL, params, cost=1)
+    rows=[]
+    for it in data.get("items", []):
+        vid = it.get("id")
+        sn  = it.get("snippet", {})
+        cd  = it.get("contentDetails", {})
+        stt = it.get("statistics", {})
+        secs = parse_iso8601_duration(cd.get("duration",""))
+        if secs is None or secs>60:
+            continue
+        pub_iso = sn.get("publishedAt","")
+        rows.append({
+            "video_id": vid,
+            "title": sn.get("title",""),
+            "description": sn.get("description",""),
+            "view_count": int(pd.to_numeric(stt.get("viewCount","0"), errors="coerce") or 0),
+            "length": fmt_hms(secs),
+            "length_seconds": secs,
+            "channel": sn.get("channelTitle",""),
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "published_at_kst": to_kst(pub_iso),
+            "published_dt_kst": to_kst_dt(pub_iso),
+        })
+    df_live = pd.DataFrame(rows)
+    if not df_live.empty:
+        now_kst = dt.datetime.now(KST)
+        df_live["hours_since_upload"] = (now_kst - pd.to_datetime(df_live["published_dt_kst"])).dt.total_seconds() / 3600.0
+        df_live["hours_since_upload"] = df_live["hours_since_upload"].clip(lower=(1.0/60.0))
+        df_live["views_per_hour"] = (df_live["view_count"] / df_live["hours_since_upload"]).round(1)
+    return df_live
+
 # ───────── 하단: 결과 테이블 ─────────
 st.subheader("🎬 관련 숏츠 리스트")
-default_kw = (hot_intersection[0] if hot_intersection else ([w for w,_ in yt_kw][0] if yt_kw else ""))
+default_kw = (hot_intersection[0] if hot_intersection else (yt_kw_words[0] if yt_kw_words else ""))
 pick_kw = st.text_input("키워드로 필터(부분 일치)", value=default_kw)
 
 df_show = df_pool.copy()
@@ -727,6 +757,13 @@ if pick_kw.strip():
     pat = re.compile(re.escape(pick_kw.strip()), re.IGNORECASE)
     mask = df_show["title"].str.contains(pat) | df_show["description"].str.contains(pat)
     df_show = df_show[mask]
+
+    # ✅ 빈결과면: 외부 라이브 검색(옵션 ON일 때)
+    if df_show.empty and allow_live_search:
+        df_live = live_search_youtube(pick_kw.strip(), max_items=20)
+        if not df_live.empty:
+            st.info("수집 풀에 없어 **외부 실시간 검색 결과**를 보여줍니다. (쿼터 사용)")
+            df_show = df_live
 
 cols = ["title","view_count","length","channel","url","published_at_kst"]
 if show_speed_cols:
