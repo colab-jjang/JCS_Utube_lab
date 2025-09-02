@@ -16,10 +16,15 @@ from typing import List, Tuple
 # ───────── 기본 설정 ─────────
 st.set_page_config(page_title="K-Politics/News Shorts Trend Board", page_icon="📺", layout="wide")
 
-API_KEY = st.secrets.get("YOUTUBE_API_KEY", "")
-if not API_KEY:
-    st.error("⚠️ API 키가 없습니다. App → Settings → Secrets 에 `YOUTUBE_API_KEY = \"발급키\"` 를 넣어주세요.")
+#여러 개의 API키 불러오기
+keys = [v for k, v in st.secrets.items() if k.startswith("YOUTUBE_API_KEY")]
+if not keys:
+    st.error("⚠️ API 키가 없습니다. App → Settings → Secrets 에 `YOUTUBE_API_KEY_1 = \"발급키\"` 를 넣어주세요.")
     st.stop()
+
+#랜덤 선택 (혹은 라운드로빈도 가능)
+import random
+API_KEY = random.choice(keys)
 
 KST = ZoneInfo("Asia/Seoul")
 PT  = ZoneInfo("America/Los_Angeles")
