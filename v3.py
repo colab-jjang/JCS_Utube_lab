@@ -188,7 +188,7 @@ COMMON_STOPWORDS = {
     # 유튜브 검색어 금지
     "구독","정치","대통령실","채널","news","대법원","특검","민주당","국민의힘","이잼","뉴스top10",
     # 방송사/매체 상수
-    "sbs","kbs","mbc","jtbc","tv조선","mbn","연합뉴스","mbc뉴스","ytn","kbc","yonhapnews","news,"채널a","newsa"
+    "sbs","kbs","mbc","jtbc","tv조선","mbn","연합뉴스","mbc뉴스","ytn","kbc","yonhapnews","news,"채널a","newsa",
     # 자주 뜨는 군더더기
     "시작","사고","전문","사진","영상"
 }
