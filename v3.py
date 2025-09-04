@@ -116,7 +116,7 @@ COMMON_STOPWORDS = {
 
 # 문장 수준 금칙(명령/구어/불량 표현 + 시간표현)
 COMMON_BANNED_PAT = re.compile(
-    r"(석방 ?하라|입 ?닥치고|무슨 ?일|수 있을까|수 있나|수 없나|있습니다)",
+    r"(석방 ?하라|입 ?닥치고|무슨 ?일|수 있을까|수 있나|수 없나|있습니다|않았다|했다|안했다|있다|없다)",
     re.I
 )
 TEMPORAL_BAD_PAT = re.compile(
