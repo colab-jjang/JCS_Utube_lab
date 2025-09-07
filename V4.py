@@ -540,7 +540,7 @@ with st.sidebar:
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
 
     # 화이트리스트 관리 (CSV + XLSX 지원)
-    st.subheader("유튜버 화이트리스트")
+ #   st.subheader("유튜버 화이트리스트")
 wl_ids = set(st.session_state.get("whitelist_ids", set()))
 
 # 현재 목록을 표 형식으로 보여주기 (채널명 위주 표시)
