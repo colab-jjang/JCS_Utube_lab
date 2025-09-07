@@ -55,7 +55,10 @@ def cloud_save_whitelist(ch_ids: set) -> bool:
         }
     }
     try:
-        r = requests.patch(...timeout=20)
+        r = requests.patch(_gist_endpoint(gist_id),
+            headers={**_gist_headers(), "Accept": "application/vnd.github+json"},
+            json=payload,
+            timeout=20,)
         if r.status_code != 200:
             st.error(f"Gist 저장 실패: {r.status_code} {r.text[:200]}")
         return r.status_code == 200
