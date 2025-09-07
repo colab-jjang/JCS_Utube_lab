@@ -10,6 +10,37 @@ import requests
 import pandas as pd
 import streamlit as st
 
+
+# ==== Cloud backend (read-only, Gist) ====
+def _gist_headers():
+    tok = st.secrets.get("GH_TOKEN", "")
+    return {"Authorization": f"token {tok}"} if tok else {}
+
+def _gist_endpoint(gist_id: str) -> str:
+    return f"https://api.github.com/gists/{gist_id}"
+
+def cloud_load_whitelist() -> set | None:
+    """Gist에서 whitelist_channels.json 읽어 set으로 반환. 실패 시 None."""
+    gist_id = st.secrets.get("GIST_ID")
+    fname = st.secrets.get("GIST_FILENAME", "whitelist_channels.json")
+    if not gist_id:
+        return None
+    try:
+        r = requests.get(_gist_endpoint(gist_id), headers=_gist_headers(), timeout=20)
+        if r.status_code != 200:
+            return None
+        files = r.json().get("files", {})
+        if fname not in files:
+            return None
+        content = files[fname].get("content", "") or "[]"
+        data = json.loads(content)
+        if isinstance(data, dict) and "channel_id" in data:
+            data = data["channel_id"]
+        if isinstance(data, list):
+            return set(str(x) for x in data)
+    except Exception:
+        return None
+
 # =========================================================
 # 기본 상수/환경
 # =========================================================
@@ -539,9 +570,16 @@ with st.sidebar:
 
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
 
-if st.sidebar.button("저장된 화이트리스트 보기"):
+if st.button("저장된 화이트리스트 보기 (Gist)", use_container_width=True):
     wl_cloud = cloud_load_whitelist()
-    st.sidebar.write(wl_cloud if wl_cloud else "저장된 화이트리스트 없음")
+    if wl_cloud:
+        df_view = fetch_channel_titles(sorted(list(wl_cloud)))
+        st.dataframe(df_view[["channel_title"]] if not df_view.empty
+                     else pd.DataFrame({"channel_title": sorted(list(wl_cloud))}),
+                     use_container_width=True, height=250)
+    else:
+        st.info("클라우드(Gist)에서 불러올 데이터가 없습니다. (토큰/GIST_ID/파일명 확인)")
+
 
     # 화이트리스트 관리 (CSV + XLSX 지원)
  #   st.subheader("유튜버 화이트리스트")
