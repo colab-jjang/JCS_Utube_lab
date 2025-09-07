@@ -19,7 +19,7 @@ def _gist_headers():
 def _gist_endpoint(gist_id: str) -> str:
     return f"https://api.github.com/gists/{gist_id}"
 
-def cloud_load_whitelist() -> set | None:
+def cloud_load_whitelist() -> Optional[set] :
     """Gist에서 whitelist_channels.json 읽어 set으로 반환. 실패 시 None."""
     gist_id = st.secrets.get("GIST_ID")
     fname = st.secrets.get("GIST_FILENAME", "whitelist_channels.json")
@@ -269,7 +269,7 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
         if r.status_code == 200:
             items = r.json().get("items", [])
             if items:
-                return items[0]["snippet"]["channelId"]
+                return items[0]["id"]["channelId"]
     except Exception as e:
         st.warning(f"채널 해석 경고: {e}")
     return None
@@ -563,12 +563,11 @@ with st.sidebar:
     metric = st.selectbox("정렬 기준", ["view_count", "views_per_hour", "comment_count", "like_count"], index=0)
     ascending = st.toggle("오름차순 정렬", value=False)
 
-#    st.subheader("UI 옵션 (v3 유지)")
-#    dark_mode = st.toggle("다크모드(간이)", value=False)
-#    font_scale = st.slider("폰트 크기 배율", 0.8, 1.6, 1.0, 0.05)
-#    apply_theme(dark_mode, font_scale)
-
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
+
+# API 키 상태 배지(진단용)    
+    st.caption(f"YouTube API Key: {'✅ 설정됨' if bool(YOUTUBE_API_KEY) else '❌ 없음'}")
+
 
 if st.button("저장된 화이트리스트 보기 (Gist)", use_container_width=True):
     wl_cloud = cloud_load_whitelist()
@@ -730,7 +729,7 @@ if data_source == "등록 채널 랭킹":
 
 if go:
     if not YOUTUBE_API_KEY:
-        st.error("환경변수 YOUTUBE_API_KEY가 설정되어 있지 않습니다.")
+        st.error("YouTube API 키가 없습니다. .streamlit/secrets.toml 또는 환경변수에 설정하세요.")
         st.stop()
 
     rows: List[Dict] = []
