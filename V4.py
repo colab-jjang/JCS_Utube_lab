@@ -83,7 +83,7 @@ COMMON_STOPWORDS = {
     "…","..",".","—","-","_","/",":",";","!","?","#","@",
     "ytn","연합뉴스","연합","한겨레","경향","국민일보","동아일보","조선일보","중앙일보","뉴시스","뉴스1","오마이뉴스","프레시안","sbs뉴스","kbs뉴스","mbc뉴스","jtbc뉴스",
     "관련영상","전체영상","풀영상","풀버전","요약본","다시보기","보도","특집","단신","단독보도","속보보도","생중계","중계","현장중계","인터뷰","직캠","클립","쇼츠",
-    "shorts","short","live","full","eng","kor","sub","subs","4k","yonhap","yonhapnews","mbc","kbs","sbs","jtbc","채널A","tv조선",
+    "shorts","short","live","full","eng","kor","sub","subs","4k",
 }
 KO_JOSA = [
     "은","는","이","가","을","를","에","에서","에게","께","와","과","도","으로","로","에게서",
@@ -436,6 +436,45 @@ def aggregate_keywords(rows: List[dict], banned_patterns: List[str], banned_word
     pairs = extract_noun_phrases("\n".join(blob), banned_patterns, banned_words, top_k=top_k)
     return pd.DataFrame([{"keyword": k, "count": c} for k, c in pairs])
 
+# --- Helper: 화이트리스트 키워드 랭킹 생성 ---
+def build_keyword_ranking(rows_all: List[Dict], banned_patterns: List[str], banned_words: set, top_k: int = 300) -> pd.DataFrame:
+    """화이트리스트 채널에서 24h 수집된 모든 Shorts를 기반으로 키워드 랭킹 구성.
+    각 키워드:
+      - channel_overlap: 키워드가 등장한 '서로 다른 채널' 수
+      - top_view_count: 그 키워드 포함 영상 중 최대 조회수
+      - top_channel/top_url: 최대 조회수 영상의 채널/URL
+    정렬: top_view_count 오름차순.
+    """
+    keyword_to_channels: Dict[str, set] = {}
+    keyword_to_best: Dict[str, Tuple[int, str, str]] = {}
+    for r in rows_all:
+        title = r.get("title", "")
+        desc = r.get("description", "")
+        ch = r.get("channel", "")
+        url = r.get("url", "")
+        views = int(r.get("view_count", 0) or 0)
+        kv_pairs = extract_noun_phrases(f"{title}
+{desc}", banned_patterns, banned_words, top_k=top_k)
+        for kw in {k for k,_ in kv_pairs}:  # 비디오 내 중복 제거
+            keyword_to_channels.setdefault(kw, set()).add(ch)
+            best = keyword_to_best.get(kw)
+            if best is None or views > best[0]:
+                keyword_to_best[kw] = (views, ch, url)
+    recs = []
+    for kw, ch_set in keyword_to_channels.items():
+        best_views, best_ch, best_url = keyword_to_best.get(kw, (0, "", ""))
+        recs.append({
+            "keyword": kw,
+            "channel_overlap": len(ch_set),
+            "top_view_count": int(best_views),
+            "top_channel": best_ch,
+            "top_url": best_url,
+        })
+    dfk = pd.DataFrame(recs)
+    if dfk.empty:
+        return dfk
+    return dfk.sort_values(["top_view_count", "channel_overlap", "keyword"], ascending=[True, False, True]).reset_index(drop=True)
+
 # =========================================================
 # Streamlit 시작
 # =========================================================
@@ -472,78 +511,81 @@ with st.sidebar:
 
     # 화이트리스트 관리 (CSV + XLSX 지원)
     st.subheader("유튜버 화이트리스트")
-    wl_ids = set(st.session_state.get("whitelist_ids", set()))
+wl_ids = set(st.session_state.get("whitelist_ids", set()))
 
-    wl_file = st.file_uploader(
-        "CSV 또는 XLSX 업로드 (channel_id / handle / url)", type=["csv", "xlsx"], key="whitelist_file"
-    )
-    if wl_file:
-        try:
-            if wl_file.name.lower().endswith(".csv"):
-                df_w = pd.read_csv(wl_file)
-            else:
-                df_w = pd.read_excel(wl_file)
-            cols = [c.lower() for c in df_w.columns]
-            raw_list = []
-            if "channel_id" in cols:
-                raw_list = [str(x) for x in df_w["channel_id"].dropna().tolist()]
-            elif "handle" in cols:
-                raw_list = [f"@{str(x).lstrip('@')}" for x in df_w["handle"].dropna().tolist()]
-            elif "url" in cols:
-                raw_list = [str(x) for x in df_w["url"].dropna().tolist()]
-            else:
-                st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
-            added = []
-            for tok in raw_list:
-                cid = extract_channel_id(tok)
-                if cid:
-                    added.append(cid)
-            wl_ids.update(added)
-            st.session_state["whitelist_ids"] = wl_ids
-            st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
-        except Exception as e:
-            st.warning(f"화이트리스트 파일 파싱 오류: {e}")
+# 현재 목록을 표 형식으로 보여주기
+if wl_ids:
+    st.dataframe(pd.DataFrame({"channel_id": sorted(list(wl_ids))}), use_container_width=True, height=220)
 
-    new_tokens = st.text_area(
-        "수동 추가 (@handle / URL / channel_id)", height=80, placeholder="@KBSNEWS, https://www.youtube.com/@jtbcnews"
-    )
-    if st.button("추가", use_container_width=True):
+# 업로드 (CSV/XLSX)
+wl_file = st.file_uploader(
+    "CSV 또는 XLSX 업로드 (channel_id / handle / url)", type=["csv", "xlsx"], key="whitelist_file"
+)
+if wl_file:
+    try:
+        if wl_file.name.lower().endswith(".csv"):
+            df_w = pd.read_csv(wl_file)
+        else:
+            df_w = pd.read_excel(wl_file)
+        cols = [c.lower() for c in df_w.columns]
+        raw_list = []
+        if "channel_id" in cols:
+            raw_list = [str(x) for x in df_w["channel_id"].dropna().tolist()]
+        elif "handle" in cols:
+            raw_list = [f"@{str(x).lstrip('@')}" for x in df_w["handle"].dropna().tolist()]
+        elif "url" in cols:
+            raw_list = [str(x) for x in df_w["url"].dropna().tolist()]
+        else:
+            st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
         added = []
-        for tok in parse_channel_input(new_tokens):
+        for tok in raw_list:
             cid = extract_channel_id(tok)
             if cid:
                 added.append(cid)
         wl_ids.update(added)
         st.session_state["whitelist_ids"] = wl_ids
-        st.success(f"추가 완료: {len(added)}개 (총 {len(wl_ids)})")
+        st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+    except Exception as e:
+        st.warning(f"화이트리스트 파일 파싱 오류: {e}")
 
-    remove_tokens = st.text_area(
-        "수동 제거 (channel_id, 쉼표/줄바꿈)", height=70, placeholder="UCxxxxxxxxxxxxxxxxxxxx"
-    )
-    if st.button("제거", use_container_width=True):
-        rm_list = [t for t in parse_channel_input(remove_tokens) if t.startswith("UC")]
+# 수동 추가/제거 UI (버튼 분리)
+new_tokens = st.text_area("수동 추가 (@handle / URL / channel_id)", height=80, placeholder="@KBSNEWS, https://www.youtube.com/@jtbcnews")
+if st.button("선택 추가", use_container_width=True):
+    added = []
+    for tok in parse_channel_input(new_tokens):
+        cid = extract_channel_id(tok)
+        if cid:
+            added.append(cid)
+    wl_ids.update(added)
+    st.session_state["whitelist_ids"] = wl_ids
+    st.success(f"추가 완료: {len(added)}개 (총 {len(wl_ids)})")
+
+# 선택 삭제 (리스트에서 고르기)
+selected_remove = st.multiselect("삭제할 channel_id 선택", options=sorted(list(wl_ids)))
+col_rm1, col_rm2 = st.columns(2)
+with col_rm1:
+    if st.button("선택 삭제", use_container_width=True, disabled=not bool(selected_remove)):
         before = len(wl_ids)
-        wl_ids = {x for x in wl_ids if x not in rm_list}
+        wl_ids = {x for x in wl_ids if x not in set(selected_remove)}
         st.session_state["whitelist_ids"] = wl_ids
         st.success(f"제거 완료: {before - len(wl_ids)}개 (총 {len(wl_ids)})")
+with col_rm2:
+    if st.button("전체 비우기", use_container_width=True, disabled=not bool(wl_ids)):
+        st.session_state["whitelist_ids"] = set()
+        wl_ids = set()
+        st.success("화이트리스트를 모두 비웠습니다.")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("화이트리스트 저장", use_container_width=True):
-            persist_whitelist(st.session_state["whitelist_ids"])
-    with c2:
-        if wl_ids:
-            wl_csv = io.StringIO()
-            pd.DataFrame({"channel_id": sorted(list(wl_ids))}).to_csv(wl_csv, index=False, encoding="utf-8-sig")
-            st.download_button(
-                "CSV 내려받기",
-                wl_csv.getvalue().encode("utf-8-sig"),
-                file_name="whitelist_channels.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("화이트리스트 저장", use_container_width=True):
+        persist_whitelist(st.session_state["whitelist_ids"])
+with c2:
+    if wl_ids:
+        wl_csv = io.StringIO()
+        pd.DataFrame({"channel_id": sorted(list(wl_ids))}).to_csv(wl_csv, index=False, encoding="utf-8-sig")
+        st.download_button("CSV 내려받기", wl_csv.getvalue().encode("utf-8-sig"), file_name="whitelist_channels.csv", mime="text/csv", use_container_width=True)
 
-    st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
+st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
 
     # 모드별 입력
     if data_source == "등록 채널 랭킹":
@@ -840,6 +882,22 @@ if go:
                 file_name="keywords_top20.csv",
                 mime="text/csv",
             )
+
+            # ===== 추가: 화이트리스트 키워드 랭킹(요청 사양) =====
+            st.subheader("화이트리스트 키워드 랭킹 (24h, 조회수 오름차순)")
+            kw_rank_df = build_keyword_ranking(rows, user_patterns, user_stops, top_k=300)
+            if kw_rank_df.empty:
+                st.info("키워드가 추출되지 않았습니다.")
+            else:
+                st.dataframe(kw_rank_df, use_container_width=True)
+                kwr_buf = io.StringIO()
+                kw_rank_df.to_csv(kwr_buf, index=False, encoding="utf-8-sig")
+                st.download_button(
+                    "키워드 랭킹 CSV 다운로드",
+                    data=kwr_buf.getvalue().encode("utf-8-sig"),
+                    file_name="keyword_ranking_24h.csv",
+                    mime="text/csv",
+                )
 
     except Exception as e:
         st.warning(f"실행 도중 경고: {e}")
