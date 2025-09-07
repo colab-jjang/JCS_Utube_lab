@@ -40,18 +40,6 @@ def cloud_load_whitelist() -> Optional[set] :
             return set(str(x) for x in data)
     except Exception:
         return None
-    
-# 저장 실제로 되는지?? 확인 되면 지워도 됨
-    def cloud_save_whitelist(ch_ids: set) -> bool:
-    ...
-    try:
-        r = requests.patch(...timeout=20)
-        if r.status_code != 200:
-            st.error(f"Gist 저장 실패: {r.status_code} {r.text[:200]}")
-        return r.status_code == 200
-    except Exception as e:
-        st.error(f"Gist 저장 예외: {e}")
-        return False
 
 def cloud_save_whitelist(ch_ids: set) -> bool:
     """Gist에 화이트리스트 저장. 성공 True/실패 False."""
@@ -67,14 +55,12 @@ def cloud_save_whitelist(ch_ids: set) -> bool:
         }
     }
     try:
-        r = requests.patch(
-            _gist_endpoint(gist_id),
-            headers={**_gist_headers(), "Accept": "application/vnd.github+json"},
-            json=payload,
-            timeout=20,
-        )
+        r = requests.patch(...timeout=20)
+        if r.status_code != 200:
+            st.error(f"Gist 저장 실패: {r.status_code} {r.text[:200]}")
         return r.status_code == 200
-    except Exception:
+    except Exception as e:
+        st.error(f"Gist 저장 예외: {e}")
         return False
 
 
