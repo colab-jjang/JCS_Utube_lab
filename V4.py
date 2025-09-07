@@ -323,6 +323,11 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
 
 def extract_channel_id(token: str) -> Optional[str]:
     token = (token or "").strip()
+     # ▶▶ 추가: 한글 인코딩 해제 + 공백 제거
+    token = unquote(token).strip()
+    # ▶▶ 추가: 끝의 슬래시 제거
+    token = re.sub(r"[/?#]+$", "", token)
+    
     if token.startswith("UC") and len(token) >= 10:
         return token
     m = re.search(r"youtube\.com/(channel/|c/|user/|@)([^/?#]+)", token)
@@ -663,7 +668,11 @@ if wl_file:
             df_w = pd.read_csv(wl_file)
         else:
             df_w = pd.read_excel(wl_file)
-        cols = [c.lower() for c in df_w.columns]
+
+        # ▶▶ 추가: 컬럼명 정규화(양끝 공백 제거 + 소문자)
+        df_w.columns = [str(c).strip().lower() for c in df_w.columns]
+
+        cols = list(df_w.columns)
         raw_list = []
         if "channel_id" in cols:
             raw_list = [str(x) for x in df_w["channel_id"].dropna().tolist()]
@@ -673,14 +682,19 @@ if wl_file:
             raw_list = [str(x) for x in df_w["url"].dropna().tolist()]
         else:
             st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
+
         added = []
         for tok in raw_list:
             cid = extract_channel_id(tok)
             if cid:
                 added.append(cid)
-        wl_ids.update(added)
-        st.session_state["whitelist_ids"] = wl_ids
-        st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+
+        if added:
+            wl_ids.update(added)
+            st.session_state["whitelist_ids"] = wl_ids
+            st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+        else:
+            st.warning("파일에서 유효한 채널을 0개 추출했습니다. (헤더/URL 형식 확인)")
     except Exception as e:
         st.warning(f"화이트리스트 파일 파싱 오류: {e}")
 
@@ -720,7 +734,9 @@ with col_rm2:
 c1, c2 = st.columns(2)
 with c1:
     if st.button("화이트리스트 저장", use_container_width=True):
-        persist_whitelist(st.session_state["whitelist_ids"])
+        ids_to_save = st.session_state.get("whitelist_ids", set())
+        st.caption(f"저장 시도: {len(ids_to_save)}개를 클라우드에 저장합니다.")
+        persist_whitelist(ids_to_save)
 with c2:
     if wl_ids:
         wl_csv = io.StringIO()
