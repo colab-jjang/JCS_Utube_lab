@@ -453,8 +453,7 @@ def build_keyword_ranking(rows_all: List[Dict], banned_patterns: List[str], bann
         ch = r.get("channel", "")
         url = r.get("url", "")
         views = int(r.get("view_count", 0) or 0)
-        kv_pairs = extract_noun_phrases(f"{title}
-{desc}", banned_patterns, banned_words, top_k=top_k)
+        kv_pairs = extract_noun_phrases(f"{title}\n{desc}", banned_patterns, banned_words, top_k=top_k)
         for kw in {k for k,_ in kv_pairs}:  # 비디오 내 중복 제거
             keyword_to_channels.setdefault(kw, set()).add(ch)
             best = keyword_to_best.get(kw)
