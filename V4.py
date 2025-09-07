@@ -165,6 +165,33 @@ def persist_whitelist(ch_ids: set):
 # =========================================================
 # 유틸/파서
 # =========================================================
+@st.cache_data(show_spinner=False, ttl=24*3600)
+def fetch_channel_titles(channel_ids: list[str]) -> pd.DataFrame:
+    """채널ID -> 채널명 매핑 표. 50개씩 배치 요청(24h 캐시)."""
+    if not channel_ids or not YOUTUBE_API_KEY:
+        return pd.DataFrame(columns=["channel_id","channel_title"])
+    out = []
+    url = f"{API_BASE}/channels"
+    quota = get_quota()
+    for i in range(0, len(channel_ids), 50):
+        batch = channel_ids[i:i+50]
+        try:
+            r = requests.get(
+                url,
+                params={"key": YOUTUBE_API_KEY, "id": ",".join(batch), "part": "snippet"},
+                timeout=15,
+            )
+            quota.add("channels.list")
+            if r.status_code == 200:
+                for it in r.json().get("items", []):
+                    out.append({
+                        "channel_id": it.get("id",""),
+                        "channel_title": (it.get("snippet",{}) or {}).get("title",""),
+                    })
+        except Exception as e:
+            st.warning(f"채널명 조회 경고: {e}")
+    return pd.DataFrame(out)
+
 
 def iso8601_to_seconds(iso_duration: str) -> int:
     m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration or "")
@@ -453,7 +480,8 @@ def build_keyword_ranking(rows_all: List[Dict], banned_patterns: List[str], bann
         ch = r.get("channel", "")
         url = r.get("url", "")
         views = int(r.get("view_count", 0) or 0)
-        kv_pairs = extract_noun_phrases(f"{title}\n{desc}", banned_patterns, banned_words, top_k=top_k)
+        kv_pairs = extract_noun_phrases(f"{title}
+{desc}", banned_patterns, banned_words, top_k=top_k)
         for kw in {k for k,_ in kv_pairs}:  # 비디오 내 중복 제거
             keyword_to_channels.setdefault(kw, set()).add(ch)
             best = keyword_to_best.get(kw)
@@ -501,15 +529,27 @@ with st.sidebar:
     metric = st.selectbox("정렬 기준", ["view_count", "views_per_hour", "comment_count", "like_count"], index=0)
     ascending = st.toggle("오름차순 정렬", value=False)
 
+    st.subheader("UI 옵션 (v3 유지)")
+    dark_mode = st.toggle("다크모드(간이)", value=False)
+    font_scale = st.slider("폰트 크기 배율", 0.8, 1.6, 1.0, 0.05)
+    apply_theme(dark_mode, font_scale)
+
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
 
     # 화이트리스트 관리 (CSV + XLSX 지원)
     st.subheader("유튜버 화이트리스트")
 wl_ids = set(st.session_state.get("whitelist_ids", set()))
 
-# 현재 목록을 표 형식으로 보여주기
+# 현재 목록을 표 형식으로 보여주기 (채널명 위주 표시)
 if wl_ids:
-    st.dataframe(pd.DataFrame({"channel_id": sorted(list(wl_ids))}), use_container_width=True, height=220)
+    df_wv = fetch_channel_titles(sorted(list(wl_ids)))
+    if df_wv.empty:
+        # API 키가 없거나 오류 시 ID만이라도 표시
+        st.dataframe(pd.DataFrame({"channel": sorted(list(wl_ids))}).rename(columns={"channel":"channel_title"}), use_container_width=True, height=220)
+    else:
+        st.dataframe(df_wv[["channel_title"]], use_container_width=True, height=220)
+        # ID→이름 매핑을 세션에 보관(삭제 UI 등에서 사용)
+        st.session_state["_id2title"] = {r["channel_id"]: r["channel_title"] for _, r in df_wv.iterrows()}
 
 # 업로드 (CSV/XLSX)
 wl_file = st.file_uploader(
@@ -555,7 +595,13 @@ if st.button("선택 추가", use_container_width=True):
     st.success(f"추가 완료: {len(added)}개 (총 {len(wl_ids)})")
 
 # 선택 삭제 (리스트에서 고르기)
-selected_remove = st.multiselect("삭제할 channel_id 선택", options=sorted(list(wl_ids)))
+# 이름으로 보이는 멀티셀렉트(내부 값은 ID)
+id2title = st.session_state.get("_id2title", {})
+selected_remove = st.multiselect(
+    "삭제할 채널 선택",
+    options=sorted(list(wl_ids)),
+    format_func=lambda cid: id2title.get(cid, cid)
+)
 col_rm1, col_rm2 = st.columns(2)
 with col_rm1:
     if st.button("선택 삭제", use_container_width=True, disabled=not bool(selected_remove)):
@@ -582,24 +628,20 @@ with c2:
 st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
 
     # 모드별 입력
-if data_source == "등록 채널 랭킹":
-    mode = st.radio("채널 입력 방식", ["수동 입력", "파일 업로드(CSV/XLSX)"], horizontal=True)
-elif data_source == "전역 키워드 검색":
-    st.subheader("전역 키워드 검색")
-    global_query = st.text_input("검색어(24h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
-    max_pages = st.slider("검색 페이지 수(쿼터 주의)", 1, 5, 1)
-else:
-    st.subheader("전체 트렌드(뉴스·정치)")
-    region_code = st.selectbox("지역(Region)", ["KR", "US", "JP", "TW", "VN", "TH", "DE", "FR", "GB", "BR"], index=0)
-    trend_pages = st.slider("트렌드 페이지 수(×50개)", 1, 5, 1)
+    if data_source == "등록 채널 랭킹":
+        mode = st.radio("채널 입력 방식", ["수동 입력", "파일 업로드(CSV/XLSX)"], horizontal=True)
+    elif data_source == "전역 키워드 검색":
+        st.subheader("전역 키워드 검색")
+        global_query = st.text_input("검색어(24h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
+        max_pages = st.slider("검색 페이지 수(쿼터 주의)", 1, 5, 1)
+    else:
+        st.subheader("전체 트렌드(뉴스·정치)")
+        region_code = st.selectbox("지역(Region)", ["KR", "US", "JP", "TW", "VN", "TH", "DE", "FR", "GB", "BR"], index=0)
+        trend_pages = st.slider("트렌드 페이지 수(×50개)", 1, 5, 1)
 
-    st.subheader("키워드 금지어")
-    default_pats = "\n".join(COMMON_BANNED_PAT)
-    default_stops = "\n".join(sorted(list(COMMON_STOPWORDS)))
-    pat_text = st.text_area("금지 패턴(정규식, 줄당 1개)", value=default_pats, height=120)
-    stop_text = st.text_area("금지 단어(줄당 1개)", value=default_stops, height=160)
-    user_patterns = [p.strip() for p in pat_text.splitlines() if p.strip()]
-    user_stops = {s.strip().lower() for s in stop_text.splitlines() if s.strip()}
+    # (UI 숨김) 키워드 금지어 섹션 제거 → 기본값 사용
+user_patterns = COMMON_BANNED_PAT
+user_stops = COMMON_STOPWORDS
 
 # ---------------------------------------------------------
 # 본문: 실행/수집
@@ -906,9 +948,20 @@ reset = QuotaMeter.next_reset_pt()
 now_pt = dt.datetime.now(PT)
 remain_sec = max(0, int((reset - now_pt).total_seconds()))
 h, m, s = remain_sec // 3600, (remain_sec % 3600) // 60, remain_sec % 60
-st.write(f"- 일일 예산: **{quota.daily_budget:,}U**")
-st.write(f"- 사용량(세션 추정): **{quota.used_units:,}U**")
-st.write(f"- 남은량(세션 추정): **{quota.remaining:,}U**")
-st.write(f"- 리셋까지 남은 시간(PT 기준): **{h:02d}:{m:02d}:{s:02d}**")
+
+used = int(quota.used_units)
+budget = int(quota.daily_budget)
+remaining = max(0, budget - used)
+pct = 0 if budget == 0 else min(used / budget, 1.0)
+
+c1, c2, c3 = st.columns([3,2,2])
+with c1:
+    st.write("사용량")
+    st.progress(pct, text=f"{used:,} / {budget:,}U  ({pct*100:.1f}%)")
+with c2:
+    st.metric("남은량", f"{remaining:,}U")
+with c3:
+    st.metric("리셋까지", f"{h:02d}:{m:02d}:{s:02d}")
+
 st.caption("※ 실제 쿼터는 Google Cloud Console 기준이며, 이 값은 세션 내 추정치입니다.")
 st.caption("© v4 · Shorts 전용(≤60s), 24시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
