@@ -589,14 +589,14 @@ st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
     # 모드별 입력
 if data_source == "등록 채널 랭킹":
     mode = st.radio("채널 입력 방식", ["수동 입력", "파일 업로드(CSV/XLSX)"], horizontal=True)
-    elif data_source == "전역 키워드 검색":
-        st.subheader("전역 키워드 검색")
-        global_query = st.text_input("검색어(24h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
-        max_pages = st.slider("검색 페이지 수(쿼터 주의)", 1, 5, 1)
-    else:
-        st.subheader("전체 트렌드(뉴스·정치)")
-        region_code = st.selectbox("지역(Region)", ["KR", "US", "JP", "TW", "VN", "TH", "DE", "FR", "GB", "BR"], index=0)
-        trend_pages = st.slider("트렌드 페이지 수(×50개)", 1, 5, 1)
+elif data_source == "전역 키워드 검색":
+    st.subheader("전역 키워드 검색")
+    global_query = st.text_input("검색어(24h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
+    max_pages = st.slider("검색 페이지 수(쿼터 주의)", 1, 5, 1)
+else:
+    st.subheader("전체 트렌드(뉴스·정치)")
+    region_code = st.selectbox("지역(Region)", ["KR", "US", "JP", "TW", "VN", "TH", "DE", "FR", "GB", "BR"], index=0)
+    trend_pages = st.slider("트렌드 페이지 수(×50개)", 1, 5, 1)
 
     st.subheader("키워드 금지어")
     default_pats = "\n".join(COMMON_BANNED_PAT)
