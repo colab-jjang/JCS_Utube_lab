@@ -1,0 +1,862 @@
+import os
+import io
+import re
+import json
+import datetime as dt
+from typing import List, Dict, Tuple, Optional
+from zoneinfo import ZoneInfo
+
+import requests
+import pandas as pd
+import streamlit as st
+
+# =========================================================
+# 기본 상수/환경
+# =========================================================
+APP_TITLE = "유튜브 숏츠 키워드/영상 랭킹 v4"
+KST = ZoneInfo("Asia/Seoul")
+PT = ZoneInfo("America/Los_Angeles")  # YouTube 쿼터 리셋(PT 자정)
+TTL_SECS_DEFAULT = 3600  # 캐시 TTL: 1시간 고정
+COL_ORDER = [
+    "title",
+    "view_count",
+    "length_mmss",
+    "channel",
+    "like_count",
+    "comment_count",
+    "published_at_kst",
+]
+
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
+API_BASE = "https://www.googleapis.com/youtube/v3"
+
+# =========================================================
+# UI 테마(간이 다크/폰트 스케일)
+# =========================================================
+def apply_theme(dark_mode: bool, font_scale: float):
+    st.markdown(
+        f"""
+        <style>
+          html, body, [data-testid=\"stAppViewContainer\"] * {{
+            font-size: {font_scale:.2f}rem !important;
+          }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    if dark_mode:
+        st.markdown(
+            """
+            <style>
+              [data-testid=\"stHeader\"] { background: #111 !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+# =========================================================
+# 강화된 한국어 금지 패턴/단어 (v3 확장)
+# =========================================================
+COMMON_BANNED_PAT = [
+    r"석방 ?하라", r"입 ?닥치고", r"무슨 ?일", r"수 ?있(?:을까|나)", r"수 ?없나",
+    r"(?<!\w)#[\w가-힣_]+", r"(?<!\w)@[\w가-힣_]+", r"\b\d{1,2}:\d{2}(?::\d{2})?\b",
+    r"\[(?:자막|ENG|SUB|KOR|KO|JP|CN|FULL|4K|LIVE|생방|실시간)\]",
+    r"[ㅋㅠㅎ]{2,}", r"[!?]{2,}", r"헉|헐|와우|풉|ㄷㄷ|ㄹㅇ|레전드|실화냐",
+    r"충격|경악|소름|대참사|초유의|핵폭탄|대폭로|충격고백|미친|미쳤|초대형|초특급",
+    r"단독|속보|긴급|긴급속보|방금전|지금난리|최후통첩|전말|전격|실시간폭로",
+    r"왜 ?그랬|어떻게 ?이럴|말이 ?되나|사실 ?인가|믿기 ?어렵|아니 ?근데",
+    r"구독|좋아요|알림설정|댓글 ?달|클릭|링크|공유|신청|참여|확인 ?해보|시청 ?해보",
+    r"제휴|광고|스폰서|쿠폰|할인코드|프로모션|이벤트|문의 ?주세요|링크 ?고정",
+    r"오늘|어제|내일|방금|현재|지금|곧|금일|금주|이번 ?주|이번 ?달|올해|작년|내년",
+]
+COMMON_STOPWORDS = {
+    "다큐디깅","나는 절로","전문","사고","sbs","kbs","mbc","jtbc","tv조선","mbn",
+    "것","거","거의","수","등","및","및등","제","그","이","저","요","네","자","우리","저희","너희","당신","여러분","본인","자신",
+    "현장","영상","사진","화면","장면","부분","내용","관련","자료","문서","기사","제목","설명","본문","요약","링크","원문","출처","캡처","썸네일","댓글창","채팅",
+    "구독","좋아요","알림","알림설정","댓글","클릭","공유","신청","참여","확인","시청","재생","재생목록","플레이리스트","업로드","링크고정","고정댓글",
+    "오늘","어제","내일","방금","지금","현재","곧","금일","이번주","이번달","올해","작년","내년","새벽","오전","오후","방송중","생방","실시간",
+    "헉","헐","와우","풉","레전드","실화냐","ㄷㄷ","ㄹㅇ","ㅋㅋ","ㅎㅎ","ㅠㅠ",
+    "충격","경악","소름","대참사","초유의","핵폭탄","대폭로","충격고백","미친","초대형","초특급","단독","속보","긴급","긴급속보","방금전","난리","최후통첩","전말","전격",
+    "제휴","광고","스폰서","쿠폰","할인","할인코드","프로모션","이벤트","문의",
+    "사실","이슈","문제","상황","사건","의혹","논란","발표","소식","전망","예상","가능성","확률","계획","보고","분석","점검","검토","결과","진행","현황","공지","공지사항",
+    "채널","구독자","조회수","좋아요수","댓글수","조회","좋아요","댓글","업로더","제작진",
+    "…","..",".","—","-","_","/",":",";","!","?","#","@",
+    "ytn","연합뉴스","연합","한겨레","경향","국민일보","동아일보","조선일보","중앙일보","뉴시스","뉴스1","오마이뉴스","프레시안","sbs뉴스","kbs뉴스","mbc뉴스","jtbc뉴스",
+    "관련영상","전체영상","풀영상","풀버전","요약본","다시보기","보도","특집","단신","단독보도","속보보도","생중계","중계","현장중계","인터뷰","직캠","클립","쇼츠",
+    "shorts","short","live","full","eng","kor","sub","subs","4k","yonhap","yonhapnews","mbc","kbs","sbs","jtbc","채널A","tv조선",
+}
+KO_JOSA = [
+    "은","는","이","가","을","를","에","에서","에게","께","와","과","도","으로","로","에게서",
+    "마다","부터","까지","조차","만","뿐","처럼","같이","보다","의","이라","라","이나","나",
+    "든지","라도","라도요","랑","야","요","께서","이나마","부터가","으로서","으로써","로서",
+    "로써","마저","밖에","이며","하며","하고","해서","인데","인데요","인데다","인데다가",
+    "께요","데요","들","들에","들로","들도","들은","채"
+]
+EN_STOP = {
+    "the","a","an","and","or","but","to","of","for","on","in","at","by","with","from","as","is","are","was","were",
+    "be","been","being","it","this","that","these","those","you","your","i","we","they","he","she","him","her","them",
+    "my","our","their","me","us","do","does","did","done","can","will","would","should","could","if","so","not"
+}
+
+# =========================================================
+# 쿼터 추정 (세션 내)
+# =========================================================
+class QuotaMeter:
+    COST = {"channels.list": 1, "playlistItems.list": 1, "videos.list": 1, "search.list": 100}
+    def __init__(self, daily_budget: int = 10000):
+        self.daily_budget = daily_budget
+        self.used_units = 0
+    def add(self, api_name: str, calls: int = 1):
+        self.used_units += self.COST.get(api_name, 1) * max(1, calls)
+    @property
+    def remaining(self):
+        return max(0, self.daily_budget - self.used_units)
+    @staticmethod
+    def next_reset_pt():
+        now_pt = dt.datetime.now(PT)
+        tomorrow = (now_pt + dt.timedelta(days=1)).date()
+        return dt.datetime.combine(tomorrow, dt.time(0,0,0), tzinfo=PT)
+
+def get_quota():
+    if "quota" not in st.session_state:
+        st.session_state["quota"] = QuotaMeter()
+    return st.session_state["quota"]
+
+# =========================================================
+# 화이트리스트(기본/저장/Secrets) 부트스트랩 + 저장
+# =========================================================
+DEFAULT_WHITELIST = [
+    # 준비되면 실제 채널ID(UC...)를 이 리스트에 채워 넣으세요.
+]
+WL_STORE_PATH = ".whitelist_channels.json"
+
+def load_whitelist_bootstrap() -> set:
+    # (1) 저장파일
+    try:
+        if os.path.exists(WL_STORE_PATH):
+            with open(WL_STORE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return set(data)
+    except Exception:
+        pass
+    # (2) secrets
+    try:
+        if "WHITELIST_CHANNELS" in st.secrets:
+            sec = st.secrets["WHITELIST_CHANNELS"]
+            if isinstance(sec, list):
+                return set(sec)
+            if isinstance(sec, str):
+                toks = [t.strip() for t in re.split(r"[\n,]+", sec) if t.strip()]
+                return set(toks)
+    except Exception:
+        pass
+    # (3) 코드 기본값
+    return set(DEFAULT_WHITELIST)
+
+def persist_whitelist(ch_ids: set):
+    try:
+        with open(WL_STORE_PATH, "w", encoding="utf-8") as f:
+            json.dump(sorted(list(ch_ids)), f, ensure_ascii=False, indent=2)
+        st.success("화이트리스트를 로컬 파일에 저장했습니다.")
+    except Exception as e:
+        st.warning(f"화이트리스트 저장 중 경고: {e}")
+
+# =========================================================
+# 유틸/파서
+# =========================================================
+
+def iso8601_to_seconds(iso_duration: str) -> int:
+    m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration or "")
+    if not m:
+        return 0
+    h = int(m.group(1) or 0)
+    mm = int(m.group(2) or 0)
+    s = int(m.group(3) or 0)
+    return h * 3600 + mm * 60 + s
+
+
+def sec_to_mmss(seconds: int) -> str:
+    m = seconds // 60
+    s = seconds % 60
+    return f"{m:02d}:{s:02d}"
+
+
+def parse_channel_input(text: str) -> List[str]:
+    return [t.strip() for t in re.split(r"[\n,]+", text or "") if t.strip()]
+
+
+@st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
+def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
+    if not YOUTUBE_API_KEY:
+        return None
+    quota = get_quota()
+    try:
+        r = requests.get(
+            f"{API_BASE}/search",
+            params={
+                "key": YOUTUBE_API_KEY,
+                "q": handle_or_name,
+                "type": "channel",
+                "maxResults": 1,
+                "part": "snippet",
+            },
+            timeout=15,
+        )
+        quota.add("search.list")
+        if r.status_code == 200:
+            items = r.json().get("items", [])
+            if items:
+                return items[0]["snippet"]["channelId"]
+    except Exception as e:
+        st.warning(f"채널 해석 경고: {e}")
+    return None
+
+
+def extract_channel_id(token: str) -> Optional[str]:
+    token = (token or "").strip()
+    if token.startswith("UC") and len(token) >= 10:
+        return token
+    m = re.search(r"youtube\.com/(channel/|c/|user/|@)([^/?#]+)", token)
+    if m:
+        kind, key = m.group(1), m.group(2)
+        if kind == "channel/":
+            return key
+        return resolve_handle_to_channel_id(key)
+    if token.startswith("@"):
+        return resolve_handle_to_channel_id(token[1:])
+    return resolve_handle_to_channel_id(token)
+
+
+@st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
+def playlist_recent_video_ids(playlist_id: str, published_after_utc: str) -> List[Tuple[str, str]]:
+    if not YOUTUBE_API_KEY:
+        return []
+    quota = get_quota()
+    out = []
+    url = f"{API_BASE}/playlistItems"
+    params = {
+        "key": YOUTUBE_API_KEY,
+        "playlistId": playlist_id,
+        "part": "snippet,contentDetails",
+        "maxResults": 50,
+    }
+    try:
+        while True:
+            r = requests.get(url, params=params, timeout=20)
+            quota.add("playlistItems.list")
+            if r.status_code != 200:
+                break
+            data = r.json()
+            for it in data.get("items", []):
+                vid = it["contentDetails"]["videoId"]
+                pub = it["contentDetails"].get("videoPublishedAt") or it["snippet"].get("publishedAt")
+                if pub and pub >= published_after_utc:
+                    out.append((vid, pub))
+            token = data.get("nextPageToken")
+            if not token or len(out) > 500:
+                break
+            params["pageToken"] = token
+    except Exception as e:
+        st.warning(f"플레이리스트 조회 경고: {e}")
+    return out
+
+
+@st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
+def fetch_videos_details(video_ids: List[str]) -> Dict[str, dict]:
+    if not YOUTUBE_API_KEY or not video_ids:
+        return {}
+    quota = get_quota()
+    url = f"{API_BASE}/videos"
+    results: Dict[str, dict] = {}
+    try:
+        for i in range(0, len(video_ids), 50):
+            batch = video_ids[i : i + 50]
+            r = requests.get(
+                url,
+                params={
+                    "key": YOUTUBE_API_KEY,
+                    "id": ",".join(batch),
+                    "part": "snippet,contentDetails,statistics",
+                },
+                timeout=20,
+            )
+            quota.add("videos.list")
+            if r.status_code != 200:
+                continue
+            for it in r.json().get("items", []):
+                results[it["id"]] = it
+    except Exception as e:
+        st.warning(f"비디오 상세 조회 경고: {e}")
+    return results
+
+
+@st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
+def global_search_recent(query: str, published_after_utc: str, max_pages: int = 1) -> List[str]:
+    if not YOUTUBE_API_KEY or not query:
+        return []
+    quota = get_quota()
+    out_ids: List[str] = []
+    url = f"{API_BASE}/search"
+    params = {
+        "key": YOUTUBE_API_KEY,
+        "q": query,
+        "type": "video",
+        "part": "snippet",
+        "maxResults": 50,
+        "order": "date",
+        "publishedAfter": published_after_utc,
+        "videoDuration": "short",  # <=4분, 후단에서 60초로 재필터
+    }
+    try:
+        page = 0
+        while True:
+            r = requests.get(url, params=params, timeout=20)
+            quota.add("search.list")
+            if r.status_code != 200:
+                break
+            data = r.json()
+            for it in data.get("items", []):
+                out_ids.append(it["id"]["videoId"])
+            token = data.get("nextPageToken")
+            page += 1
+            if not token or page >= max_pages:
+                break
+            params["pageToken"] = token
+    except Exception as e:
+        st.warning(f"전역 검색 경고: {e}")
+    return out_ids
+
+
+@st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
+def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, dict]:
+    """뉴스·정치(25) mostPopular → 후단에서 24h + Shorts(≤60s) 필터"""
+    if not YOUTUBE_API_KEY:
+        return {}
+    quota = get_quota()
+    url = f"{API_BASE}/videos"
+    params = {
+        "key": YOUTUBE_API_KEY,
+        "part": "snippet,contentDetails,statistics",
+        "chart": "mostPopular",
+        "videoCategoryId": "25",  # 뉴스·정치
+        "regionCode": region_code,
+        "maxResults": 50,
+    }
+    out: Dict[str, dict] = {}
+    page = 0
+    next_token = None
+    try:
+        while True:
+            if next_token:
+                params["pageToken"] = next_token
+            r = requests.get(url, params=params, timeout=20)
+            quota.add("videos.list")
+            if r.status_code != 200:
+                break
+            data = r.json()
+            for it in data.get("items", []):
+                out[it["id"]] = it
+            next_token = data.get("nextPageToken")
+            page += 1
+            if not next_token or page >= max_pages:
+                break
+    except Exception as e:
+        st.warning(f"트렌드 조회 경고: {e}")
+    return out
+
+# =========================================================
+# 키워드(명사구) 추출
+# =========================================================
+
+def normalize_text(s: str) -> str:
+    s = re.sub(r"https?://\S+", " ", s or "")
+    s = re.sub(r"[^\w\s@#\-가-힣A-Za-z0-9]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def trim_josa_ko(token: str) -> str:
+    for j in sorted(KO_JOSA, key=len, reverse=True):
+        if token.endswith(j) and len(token) > len(j) + 1:
+            return token[: -len(j)]
+    return token
+
+
+def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: set, top_k: int = 20):
+    if not text:
+        return []
+    text = normalize_text(text)
+    for pat in banned_patterns:
+        text = re.sub(pat, " ", text, flags=re.IGNORECASE)
+    tokens = text.split()
+    ko_tokens, en_tokens = [], []
+    for t in tokens:
+        if re.search(r"[가-힣]", t):
+            ko_tokens.append(trim_josa_ko(t))
+        else:
+            tt = t.lower()
+            if tt in EN_STOP:
+                continue
+            en_tokens.append(tt)
+    ko_tokens = [t for t in ko_tokens if len(t) >= 2 and t not in banned_words]
+    en_tokens = [t for t in en_tokens if len(t) >= 2 and t not in banned_words]
+
+    def ngrams(seq, n):
+        return [" ".join(seq[i : i + n]) for i in range(len(seq) - n + 1)]
+
+    phrases = []
+    phrases += ko_tokens + en_tokens
+    phrases += ngrams(ko_tokens, 2) + ngrams(ko_tokens, 3)
+    phrases += ngrams(en_tokens, 2) + ngrams(en_tokens, 3)
+
+    def canon(p):
+        c = re.sub(r"\s+", "", p.lower())
+        c = re.sub(r"[^\w가-힣]", "", c)
+        c = trim_josa_ko(c)
+        return c
+
+    freq: Dict[str, int] = {}
+    display: Dict[str, str] = {}
+    for p in phrases:
+        key = canon(p)
+        if not key or key in banned_words or len(key) < 2:
+            continue
+        freq[key] = freq.get(key, 0) + 1
+        display.setdefault(key, p)
+    ranked = sorted(freq.items(), key=lambda x: x[1], reverse=True)[: top_k]
+    return [(display[k], c) for k, c in ranked]
+
+
+def aggregate_keywords(rows: List[dict], banned_patterns: List[str], banned_words: set, top_k: int = 20):
+    blob = []
+    for r in rows:
+        blob.append(r.get("title", ""))
+        blob.append(r.get("description", ""))
+    pairs = extract_noun_phrases("\n".join(blob), banned_patterns, banned_words, top_k=top_k)
+    return pd.DataFrame([{"keyword": k, "count": c} for k, c in pairs])
+
+# =========================================================
+# Streamlit 시작
+# =========================================================
+st.set_page_config(page_title=APP_TITLE, layout="wide")
+st.title(APP_TITLE)
+
+# 세션 부트스트랩
+if "quota" not in st.session_state:
+    st.session_state["quota"] = QuotaMeter()
+if "whitelist_ids" not in st.session_state:
+    st.session_state["whitelist_ids"] = load_whitelist_bootstrap()
+
+# ---------------------------------------------------------
+# 사이드바
+# ---------------------------------------------------------
+with st.sidebar:
+    st.subheader("데이터 소스")
+    data_source = st.radio(
+        "수집 모드",
+        ["전체 트렌드(뉴스·정치)", "등록 채널 랭킹", "전역 키워드 검색"],
+        index=0,
+    )
+
+    st.subheader("정렬")
+    metric = st.selectbox("정렬 기준", ["view_count", "views_per_hour", "comment_count", "like_count"], index=0)
+    ascending = st.toggle("오름차순 정렬", value=False)
+
+    st.subheader("UI 옵션 (v3 유지)")
+    dark_mode = st.toggle("다크모드(간이)", value=False)
+    font_scale = st.slider("폰트 크기 배율", 0.8, 1.6, 1.0, 0.05)
+    apply_theme(dark_mode, font_scale)
+
+    st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
+
+    # 화이트리스트 관리 (CSV + XLSX 지원)
+    st.subheader("유튜버 화이트리스트")
+    wl_ids = set(st.session_state.get("whitelist_ids", set()))
+
+    wl_file = st.file_uploader(
+        "CSV 또는 XLSX 업로드 (channel_id / handle / url)", type=["csv", "xlsx"], key="whitelist_file"
+    )
+    if wl_file:
+        try:
+            if wl_file.name.lower().endswith(".csv"):
+                df_w = pd.read_csv(wl_file)
+            else:
+                df_w = pd.read_excel(wl_file)
+            cols = [c.lower() for c in df_w.columns]
+            raw_list = []
+            if "channel_id" in cols:
+                raw_list = [str(x) for x in df_w["channel_id"].dropna().tolist()]
+            elif "handle" in cols:
+                raw_list = [f"@{str(x).lstrip('@')}" for x in df_w["handle"].dropna().tolist()]
+            elif "url" in cols:
+                raw_list = [str(x) for x in df_w["url"].dropna().tolist()]
+            else:
+                st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
+            added = []
+            for tok in raw_list:
+                cid = extract_channel_id(tok)
+                if cid:
+                    added.append(cid)
+            wl_ids.update(added)
+            st.session_state["whitelist_ids"] = wl_ids
+            st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+        except Exception as e:
+            st.warning(f"화이트리스트 파일 파싱 오류: {e}")
+
+    new_tokens = st.text_area(
+        "수동 추가 (@handle / URL / channel_id)", height=80, placeholder="@KBSNEWS, https://www.youtube.com/@jtbcnews"
+    )
+    if st.button("추가", use_container_width=True):
+        added = []
+        for tok in parse_channel_input(new_tokens):
+            cid = extract_channel_id(tok)
+            if cid:
+                added.append(cid)
+        wl_ids.update(added)
+        st.session_state["whitelist_ids"] = wl_ids
+        st.success(f"추가 완료: {len(added)}개 (총 {len(wl_ids)})")
+
+    remove_tokens = st.text_area(
+        "수동 제거 (channel_id, 쉼표/줄바꿈)", height=70, placeholder="UCxxxxxxxxxxxxxxxxxxxx"
+    )
+    if st.button("제거", use_container_width=True):
+        rm_list = [t for t in parse_channel_input(remove_tokens) if t.startswith("UC")]
+        before = len(wl_ids)
+        wl_ids = {x for x in wl_ids if x not in rm_list}
+        st.session_state["whitelist_ids"] = wl_ids
+        st.success(f"제거 완료: {before - len(wl_ids)}개 (총 {len(wl_ids)})")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("화이트리스트 저장", use_container_width=True):
+            persist_whitelist(st.session_state["whitelist_ids"])
+    with c2:
+        if wl_ids:
+            wl_csv = io.StringIO()
+            pd.DataFrame({"channel_id": sorted(list(wl_ids))}).to_csv(wl_csv, index=False, encoding="utf-8-sig")
+            st.download_button(
+                "CSV 내려받기",
+                wl_csv.getvalue().encode("utf-8-sig"),
+                file_name="whitelist_channels.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+    st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
+
+    # 모드별 입력
+    if data_source == "등록 채널 랭킹":
+        mode = st.radio("채널 입력 방식", ["수동 입력", "파일 업로드(CSV/XLSX)"], horizontal=True)
+    elif data_source == "전역 키워드 검색":
+        st.subheader("전역 키워드 검색")
+        global_query = st.text_input("검색어(24h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
+        max_pages = st.slider("검색 페이지 수(쿼터 주의)", 1, 5, 1)
+    else:
+        st.subheader("전체 트렌드(뉴스·정치)")
+        region_code = st.selectbox("지역(Region)", ["KR", "US", "JP", "TW", "VN", "TH", "DE", "FR", "GB", "BR"], index=0)
+        trend_pages = st.slider("트렌드 페이지 수(×50개)", 1, 5, 1)
+
+    st.subheader("키워드 금지어")
+    default_pats = "\n".join(COMMON_BANNED_PAT)
+    default_stops = "\n".join(sorted(list(COMMON_STOPWORDS)))
+    pat_text = st.text_area("금지 패턴(정규식, 줄당 1개)", value=default_pats, height=120)
+    stop_text = st.text_area("금지 단어(줄당 1개)", value=default_stops, height=160)
+    user_patterns = [p.strip() for p in pat_text.splitlines() if p.strip()]
+    user_stops = {s.strip().lower() for s in stop_text.splitlines() if s.strip()}
+
+# ---------------------------------------------------------
+# 본문: 실행/수집
+# ---------------------------------------------------------
+now_utc = dt.datetime.now(dt.timezone.utc)
+published_after_utc = (now_utc - dt.timedelta(hours=24)).isoformat()
+go = st.button("수집/갱신 실행", type="primary")
+
+# 등록 채널 입력(필요 시)
+channel_inputs: List[str] = []
+if data_source == "등록 채널 랭킹":
+    if mode == "수동 입력":
+        st.markdown("**채널 입력**: 채널ID(UC…), URL, @handle, 채널명 허용. 쉼표/줄바꿈 구분")
+        manual_text = st.text_area(
+            "채널 목록",
+            placeholder="@KBSNEWS, https://www.youtube.com/@jtbcnews, UCxxxxxxxxxxxxxxxxxxxx",
+            height=120,
+        )
+        channel_inputs = parse_channel_input(manual_text) if manual_text else []
+    else:
+        up = st.file_uploader(
+            "CSV/XLSX 업로드(컬럼: channel_id 또는 url 또는 handle)", type=["csv", "xlsx"], key="channels_csv"
+        )
+        if up:
+            try:
+                if up.name.lower().endswith(".csv"):
+                    df_up = pd.read_csv(up)
+                else:
+                    df_up = pd.read_excel(up)
+                cols = [c.lower() for c in df_up.columns]
+                if "channel_id" in cols:
+                    channel_inputs = [str(x) for x in df_up["channel_id"].dropna().tolist()]
+                elif "url" in cols:
+                    channel_inputs = [str(x) for x in df_up["url"].dropna().tolist()]
+                elif "handle" in cols:
+                    channel_inputs = [f"@{str(x).lstrip('@')}" for x in df_up["handle"].dropna().tolist()]
+                else:
+                    st.warning("파일에 channel_id / url / handle 컬럼 중 하나가 필요합니다.")
+            except Exception as e:
+                st.warning(f"채널 목록 파일 파싱 오류: {e}")
+
+if go:
+    if not YOUTUBE_API_KEY:
+        st.error("환경변수 YOUTUBE_API_KEY가 설정되어 있지 않습니다.")
+        st.stop()
+
+    rows: List[Dict] = []
+    try:
+        if data_source == "전체 트렌드(뉴스·정치)":
+            trend = trending_news_politics(region_code, max_pages=trend_pages)
+            for vid, it in trend.items():
+                cd = it.get("contentDetails", {})
+                sp = it.get("snippet", {}) or {}
+                stt = it.get("statistics", {}) or {}
+                dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
+                pub = sp.get("publishedAt")
+                if not pub:
+                    continue
+                try:
+                    pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+                except:
+                    continue
+                # 24h + Shorts 필터
+                if pub_dt < dt.datetime.fromisoformat(published_after_utc):
+                    continue
+                if dur > 60:
+                    continue
+
+                ch_id = sp.get("channelId", "")
+                wl = st.session_state.get("whitelist_ids", set())
+                if wl and ch_id not in wl:
+                    continue
+
+                views = int(stt.get("viewCount", 0) or 0)
+                likes = int(stt.get("likeCount", 0) or 0)
+                comments = int(stt.get("commentCount", 0) or 0)
+                hours = max((now_utc - pub_dt).total_seconds() / 3600, 1 / 60)
+                vph = views / hours
+                pub_kst = pub_dt.astimezone(KST)
+
+                rows.append(
+                    {
+                        "video_id": vid,
+                        "title": sp.get("title", ""),
+                        "description": sp.get("description", ""),
+                        "channel": sp.get("channelTitle", ""),
+                        "length_sec": dur,
+                        "length_mmss": sec_to_mmss(dur),
+                        "view_count": views,
+                        "like_count": likes,
+                        "comment_count": comments,
+                        "views_per_hour": vph,
+                        "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                        "url": f"https://www.youtube.com/watch?v={vid}",
+                    }
+                )
+
+        elif data_source == "전역 키워드 검색":
+            if not global_query:
+                st.warning("전역 검색 모드에서는 검색어가 필요합니다.")
+            else:
+                ids = global_search_recent(global_query, published_after_utc, max_pages=max_pages)
+                details = fetch_videos_details(ids)
+                for vid, it in details.items():
+                    cd = it.get("contentDetails", {})
+                    sp = it.get("snippet", {}) or {}
+                    stt = it.get("statistics", {}) or {}
+                    dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
+                    if dur > 60:
+                        continue
+                    pub = sp.get("publishedAt")
+                    if not pub:
+                        continue
+                    pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+                    ch_id = sp.get("channelId", "")
+                    wl = st.session_state.get("whitelist_ids", set())
+                    if wl and ch_id not in wl:
+                        continue
+
+                    views = int(stt.get("viewCount", 0) or 0)
+                    likes = int(stt.get("likeCount", 0) or 0)
+                    comments = int(stt.get("commentCount", 0) or 0)
+                    hours = max((now_utc - pub_dt).total_seconds() / 3600, 1 / 60)
+                    vph = views / hours
+                    pub_kst = pub_dt.astimezone(KST)
+
+                    rows.append(
+                        {
+                            "video_id": vid,
+                            "title": sp.get("title", ""),
+                            "description": sp.get("description", ""),
+                            "channel": sp.get("channelTitle", ""),
+                            "length_sec": dur,
+                            "length_mmss": sec_to_mmss(dur),
+                            "view_count": views,
+                            "like_count": likes,
+                            "comment_count": comments,
+                            "views_per_hour": vph,
+                            "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                            "url": f"https://www.youtube.com/watch?v={vid}",
+                        }
+                    )
+
+        else:  # 등록 채널 랭킹
+            if not channel_inputs:
+                st.warning("채널을 입력(또는 업로드)하세요.")
+            else:
+                def channel_title_and_uploads(cid: str):
+                    r = requests.get(
+                        f"{API_BASE}/channels",
+                        params={"key": YOUTUBE_API_KEY, "id": cid, "part": "snippet,contentDetails"},
+                        timeout=15,
+                    )
+                    get_quota().add("channels.list")
+                    if r.status_code == 200:
+                        items = r.json().get("items", [])
+                        if items:
+                            return (
+                                items[0]["snippet"]["title"],
+                                items[0]["contentDetails"]["relatedPlaylists"]["uploads"],
+                            )
+                    return None, None
+
+                ch_ids: List[str] = []
+                for token in channel_inputs:
+                    cid = extract_channel_id(token)
+                    if cid:
+                        ch_ids.append(cid)
+                    else:
+                        st.warning(f"채널 해석 실패: {token}")
+                ch_ids = list(dict.fromkeys(ch_ids))
+
+                all_video_pairs: List[Tuple[str, str]] = []
+                ch_name_map: Dict[str, str] = {}
+                for cid in ch_ids:
+                    try:
+                        ch_title, pid = channel_title_and_uploads(cid)
+                        if not pid:
+                            st.warning(f"업로드 목록을 찾지 못했습니다: {cid}")
+                            continue
+                        ch_name_map[cid] = ch_title or cid
+                        pairs = playlist_recent_video_ids(pid, published_after_utc)
+                        all_video_pairs.extend(pairs)
+                    except Exception as e:
+                        st.warning(f"채널 처리 경고({cid}): {e}")
+
+                details = fetch_videos_details([v for v, _ in all_video_pairs])
+                for vid, pub in all_video_pairs:
+                    it = details.get(vid)
+                    if not it:
+                        continue
+                    cd = it.get("contentDetails", {})
+                    sp = it.get("snippet", {}) or {}
+                    stt = it.get("statistics", {}) or {}
+                    dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
+                    if dur > 60:
+                        continue
+                    ch_id = sp.get("channelId", "")
+                    wl = st.session_state.get("whitelist_ids", set())
+                    if wl and ch_id not in wl:
+                        continue
+                    title = sp.get("title", "")
+                    desc = sp.get("description", "")
+                    ch = sp.get("channelTitle", "") or ch_name_map.get(ch_id, "")
+                    pub_kst = dt.datetime.fromisoformat(pub.replace("Z", "+00:00")).astimezone(KST)
+                    views = int(stt.get("viewCount", 0) or 0)
+                    likes = int(stt.get("likeCount", 0) or 0)
+                    comments = int(stt.get("commentCount", 0) or 0)
+                    hours = max((now_utc - dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))).total_seconds() / 3600, 1 / 60)
+                    vph = views / hours
+                    rows.append(
+                        {
+                            "video_id": vid,
+                            "title": title,
+                            "description": desc,
+                            "channel": ch,
+                            "length_sec": dur,
+                            "length_mmss": sec_to_mmss(dur),
+                            "view_count": views,
+                            "like_count": likes,
+                            "comment_count": comments,
+                            "views_per_hour": vph,
+                            "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                            "url": f"https://www.youtube.com/watch?v={vid}",
+                        }
+                    )
+
+        # ---- 출력/CSV/키워드 ----
+        df = pd.DataFrame(rows)
+        if df.empty:
+            st.info("조건에 맞는 24시간 내 Shorts 데이터가 없습니다.")
+        else:
+            sort_by = metric if metric in df.columns else "view_count"
+            df_sorted = df.sort_values(by=sort_by, ascending=ascending, kind="mergesort").reset_index(drop=True)
+            df_top = df_sorted.head(20)
+
+            show_cols = [c for c in COL_ORDER if c in df_top.columns]
+            st.subheader("Top 20 랭킹")
+            st.dataframe(df_top[show_cols], use_container_width=True)
+
+            # 영상 Top20 CSV (링크 포함)
+            csv_buf = io.StringIO()
+            out_cols = [
+                "title",
+                "view_count",
+                "length_mmss",
+                "channel",
+                "like_count",
+                "comment_count",
+                "published_at_kst",
+                "url",
+            ]
+            df_top[out_cols].to_csv(csv_buf, index=False, encoding="utf-8-sig")
+            st.download_button(
+                "영상 Top20 CSV 다운로드",
+                data=csv_buf.getvalue().encode("utf-8-sig"),
+                file_name="shorts_top20.csv",
+                mime="text/csv",
+            )
+
+            # 키워드 Top20
+            kw_df = aggregate_keywords(
+                rows=df_top.to_dict(orient="records"),
+                banned_patterns=user_patterns,
+                banned_words=user_stops,
+            )
+            st.subheader("키워드 Top20")
+            st.dataframe(kw_df, use_container_width=True)
+            kw_buf = io.StringIO()
+            kw_df.to_csv(kw_buf, index=False, encoding="utf-8-sig")
+            st.download_button(
+                "키워드 Top20 CSV 다운로드",
+                data=kw_buf.getvalue().encode("utf-8-sig"),
+                file_name="keywords_top20.csv",
+                mime="text/csv",
+            )
+
+    except Exception as e:
+        st.warning(f"실행 도중 경고: {e}")
+
+# ---------------------------------------------------------
+# 쿼터 현황(세션 추정)
+# ---------------------------------------------------------
+st.divider()
+st.subheader("API 쿼터 현황(세션 추정)")
+quota = get_quota()
+reset = QuotaMeter.next_reset_pt()
+now_pt = dt.datetime.now(PT)
+remain_sec = max(0, int((reset - now_pt).total_seconds()))
+h, m, s = remain_sec // 3600, (remain_sec % 3600) // 60, remain_sec % 60
+st.write(f"- 일일 예산: **{quota.daily_budget:,}U**")
+st.write(f"- 사용량(세션 추정): **{quota.used_units:,}U**")
+st.write(f"- 남은량(세션 추정): **{quota.remaining:,}U**")
+st.write(f"- 리셋까지 남은 시간(PT 기준): **{h:02d}:{m:02d}:{s:02d}**")
+st.caption("※ 실제 쿼터는 Google Cloud Console 기준이며, 이 값은 세션 내 추정치입니다.")
+st.caption("© v4 · Shorts 전용(≤60s), 24시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
