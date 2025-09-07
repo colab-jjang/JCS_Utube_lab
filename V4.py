@@ -501,11 +501,6 @@ with st.sidebar:
     metric = st.selectbox("정렬 기준", ["view_count", "views_per_hour", "comment_count", "like_count"], index=0)
     ascending = st.toggle("오름차순 정렬", value=False)
 
-＃    st.subheader("UI 옵션 (v3 유지)")
-＃    dark_mode = st.toggle("다크모드(간이)", value=False)
-＃    font_scale = st.slider("폰트 크기 배율", 0.8, 1.6, 1.0, 0.05)
-＃    apply_theme(dark_mode, font_scale)
-
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
 
     # 화이트리스트 관리 (CSV + XLSX 지원)
