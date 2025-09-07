@@ -10,6 +10,7 @@ import requests
 import pandas as pd
 import streamlit as st
 
+from urllib.parse import unquote
 
 # ==== Cloud backend (read-only, Gist) ====
 def _gist_headers():
