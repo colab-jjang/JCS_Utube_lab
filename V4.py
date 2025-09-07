@@ -40,6 +40,18 @@ def cloud_load_whitelist() -> Optional[set] :
             return set(str(x) for x in data)
     except Exception:
         return None
+    
+# 저장 실제로 되는지?? 확인 되면 지워도 됨
+    def cloud_save_whitelist(ch_ids: set) -> bool:
+    ...
+    try:
+        r = requests.patch(...timeout=20)
+        if r.status_code != 200:
+            st.error(f"Gist 저장 실패: {r.status_code} {r.text[:200]}")
+        return r.status_code == 200
+    except Exception as e:
+        st.error(f"Gist 저장 예외: {e}")
+        return False
 
 def cloud_save_whitelist(ch_ids: set) -> bool:
     """Gist에 화이트리스트 저장. 성공 True/실패 False."""
@@ -612,13 +624,20 @@ with st.sidebar:
 
 if st.button("저장된 화이트리스트 보기", use_container_width=True):
     wl_cloud = cloud_load_whitelist()
-    if wl_cloud:
-        df_view = fetch_channel_titles(sorted(list(wl_cloud)))
-        st.dataframe(df_view[["channel_title"]] if not df_view.empty
-                     else pd.DataFrame({"channel_title": sorted(list(wl_cloud))}),
-                     use_container_width=True, height=250)
+    if wl_cloud is None:
+        st.error("클라우드(Gist)에서 불러올 수 없습니다. (토큰/GIST_ID/파일명/네트워크 확인)")
     else:
-        st.info("클라우드(Gist)에서 불러올 데이터가 없습니다. (토큰/GIST_ID/파일명 확인)")
+        st.caption(f"클라우드 화이트리스트 채널 수: {len(wl_cloud)}개")
+        if len(wl_cloud) == 0:
+            st.info("클라우드에 현재 채널이 0개입니다. (저장 버튼으로 채널을 올려주세요)")
+        df_view = fetch_channel_titles(sorted(list(wl_cloud)))
+        if not df_view.empty:
+            st.dataframe(df_view[["channel_title"]], use_container_width=True, height=250)
+        else:
+            # API 키 없거나 매핑 실패하면 ID라도 표시
+            st.dataframe(pd.DataFrame({"channel_title": sorted(list(wl_cloud))}),
+                         use_container_width=True, height=250)
+
     
 # API 키 상태 배지(진단용)    
     st.caption(f"YouTube API Key: {'✅ 설정됨' if bool(YOUTUBE_API_KEY) else '❌ 없음'}")
