@@ -623,6 +623,13 @@ if st.button("저장된 화이트리스트 보기", use_container_width=True):
 # API 키 상태 배지(진단용)    
     st.caption(f"YouTube API Key: {'✅ 설정됨' if bool(YOUTUBE_API_KEY) else '❌ 없음'}")
 
+#토큰 잘 들어가는지 확인하는 부분
+    st.caption(
+        f"Gist Secrets ▶ ID: {'✅' if (st.secrets.get('GIST_ID') or '').strip() else '❌'} · "
+        f"Token: {'✅' if (st.secrets.get('GH_TOKEN') or '').strip() else '❌'} · "
+        f"File: {st.secrets.get('GIST_FILENAME','(default)')}"
+    )
+
     # 화이트리스트 관리 (CSV + XLSX 지원)
  #   st.subheader("유튜버 화이트리스트")
 wl_ids = set(st.session_state.get("whitelist_ids", set()))
