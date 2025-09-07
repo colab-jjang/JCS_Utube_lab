@@ -610,11 +610,7 @@ with st.sidebar:
 
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
 
-# API 키 상태 배지(진단용)    
-    st.caption(f"YouTube API Key: {'✅ 설정됨' if bool(YOUTUBE_API_KEY) else '❌ 없음'}")
-
-
-if st.button("저장된 화이트리스트 보기 (Gist)", use_container_width=True):
+if st.button("저장된 화이트리스트 보기", use_container_width=True):
     wl_cloud = cloud_load_whitelist()
     if wl_cloud:
         df_view = fetch_channel_titles(sorted(list(wl_cloud)))
@@ -623,7 +619,9 @@ if st.button("저장된 화이트리스트 보기 (Gist)", use_container_width=T
                      use_container_width=True, height=250)
     else:
         st.info("클라우드(Gist)에서 불러올 데이터가 없습니다. (토큰/GIST_ID/파일명 확인)")
-
+    
+# API 키 상태 배지(진단용)    
+    st.caption(f"YouTube API Key: {'✅ 설정됨' if bool(YOUTUBE_API_KEY) else '❌ 없음'}")
 
     # 화이트리스트 관리 (CSV + XLSX 지원)
  #   st.subheader("유튜버 화이트리스트")
@@ -800,9 +798,6 @@ if go:
                     continue
 
                 ch_id = sp.get("channelId", "")
-                wl = st.session_state.get("whitelist_ids", set())
-                if wl and ch_id not in wl:
-                    continue
 
                 views = int(stt.get("viewCount", 0) or 0)
                 likes = int(stt.get("likeCount", 0) or 0)
@@ -846,9 +841,6 @@ if go:
                         continue
                     pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
                     ch_id = sp.get("channelId", "")
-                    wl = st.session_state.get("whitelist_ids", set())
-                    if wl and ch_id not in wl:
-                        continue
 
                     views = int(stt.get("viewCount", 0) or 0)
                     likes = int(stt.get("likeCount", 0) or 0)
