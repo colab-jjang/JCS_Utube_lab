@@ -539,6 +539,10 @@ with st.sidebar:
 
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
 
+if st.sidebar.button("저장된 화이트리스트 보기"):
+    wl_cloud = cloud_load_whitelist()
+    st.sidebar.write(wl_cloud if wl_cloud else "저장된 화이트리스트 없음")
+
     # 화이트리스트 관리 (CSV + XLSX 지원)
  #   st.subheader("유튜버 화이트리스트")
 wl_ids = set(st.session_state.get("whitelist_ids", set()))
