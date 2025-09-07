@@ -41,6 +41,31 @@ def cloud_load_whitelist() -> Optional[set] :
     except Exception:
         return None
 
+def cloud_save_whitelist(ch_ids: set) -> bool:
+    """Gist에 화이트리스트 저장. 성공 True/실패 False."""
+    gist_id = st.secrets.get("GIST_ID")
+    fname = st.secrets.get("GIST_FILENAME", "whitelist_channels.json")
+    if not gist_id:
+        return False
+    payload = {
+        "files": {
+            fname: {
+                "content": json.dumps(sorted(list(ch_ids)), ensure_ascii=False, indent=2)
+            }
+        }
+    }
+    try:
+        r = requests.patch(
+            _gist_endpoint(gist_id),
+            headers={**_gist_headers(), "Accept": "application/vnd.github+json"},
+            json=payload,
+            timeout=20,
+        )
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
 # =========================================================
 # 기본 상수/환경
 # =========================================================
@@ -166,6 +191,13 @@ DEFAULT_WHITELIST = [
 WL_STORE_PATH = ".whitelist_channels.json"
 
 def load_whitelist_bootstrap() -> set:
+    # (0) 클라우드 우선
+    try:
+        wl = cloud_load_whitelist()
+        if wl:
+            return wl
+    except Exception:
+        pass
     # (1) 저장파일
     try:
         if os.path.exists(WL_STORE_PATH):
@@ -189,13 +221,26 @@ def load_whitelist_bootstrap() -> set:
     # (3) 코드 기본값
     return set(DEFAULT_WHITELIST)
 
+
 def persist_whitelist(ch_ids: set):
+    # 1) 클라우드 먼저
+    if cloud_save_whitelist(ch_ids):
+        st.success("화이트리스트를 클라우드(Gist)에 저장했습니다.")
+        # 캐시용으로 로컬에도 써두기(선택)
+        try:
+            with open(WL_STORE_PATH, "w", encoding="utf-8") as f:
+                json.dump(sorted(list(ch_ids)), f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return
+    # 2) 폴백: 로컬 저장
     try:
         with open(WL_STORE_PATH, "w", encoding="utf-8") as f:
             json.dump(sorted(list(ch_ids)), f, ensure_ascii=False, indent=2)
-        st.success("화이트리스트를 로컬 파일에 저장했습니다.")
+        st.success("클라우드 저장 실패 → 로컬에 저장했습니다.")
     except Exception as e:
         st.warning(f"화이트리스트 저장 중 경고: {e}")
+
 
 # =========================================================
 # 유틸/파서
