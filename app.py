@@ -169,7 +169,7 @@ def next_reset_info():
 if "quota_used" not in st.session_state:
     st.session_state["quota_used"] = load_quota_used()
 else:
-#날짜가 바뀌었을 수도 있으니 재동기화
+    #날짜가 바뀌었을 수도 있으니 재동기화
     st.session_state["quota_used"] = load_quota_used()
 
 # ====== UI ======
