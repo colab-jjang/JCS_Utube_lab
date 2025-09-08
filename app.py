@@ -3,6 +3,7 @@ import pandas as pd
 import datetime as dt
 from zoneinfo import ZoneInfo
 import requests
+from urllib.parse import unquote
 
 # ====== Settings ======
 API_KEY = st.secrets.get("YOUTUBE_API_KEY", "")
