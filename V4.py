@@ -276,7 +276,8 @@ def fetch_channel_titles(channel_ids: list[str]) -> pd.DataFrame:
 
 
 def iso8601_to_seconds(iso_duration: str) -> int:
-    m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration or "")
+    m = re.search(r"youtube\.com/(channel/[^/?#]+|c/[^/?#]+|user/[^/?#]+|@[^/?#]+)", token)
+
     if not m:
         return 0
     h = int(m.group(1) or 0)
@@ -691,9 +692,10 @@ if wl_file:
         # === 여기서 ID 변환 ===
         added = []
         for tok in raw_list:
+            st.write("RAW:", repr(tok))
             cid = extract_channel_id(tok)
-            if cid:
-                added.append(cid)
+            st.write("EXTRACT:", tok, "→", cid)
+
 
         wl_ids.update(added)
         st.session_state["whitelist_ids"] = wl_ids
