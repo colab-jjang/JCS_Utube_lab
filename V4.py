@@ -324,23 +324,29 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
 
 def extract_channel_id(token: str) -> Optional[str]:
     token = (token or "").strip()
-     # ▶▶ 추가: 한글 인코딩 해제 + 공백 제거
     token = unquote(token).strip()
-    # ▶▶ 추가: 끝의 슬래시 제거
     token = re.sub(r"[/?#]+$", "", token)
-    
+
+    # 직접 채널 ID (UC...)인 경우
     if token.startswith("UC") and len(token) >= 10:
         return token
-    m = re.search(r"youtube\.com/(channel/|c/|user/|@)([^/?#]+)", token)
+
+    # youtube.com URL 패턴
+    m = re.search(r"youtube\.com/(channel/[^/?#]+|c/[^/?#]+|user/[^/?#]+|@[^/?#]+)", token)
     if m:
-        kind, key = m.group(1), m.group(2)
-        if kind == "channel/":
-            return key
-        return resolve_handle_to_channel_id(key)
+        key = m.group(1)
+        if key.startswith("channel/"):
+            return key.split("/",1)[1]
+        if key.startswith("@"):
+            return resolve_handle_to_channel_id(key[1:])  # '@' 빼고 API 조회
+        else:
+            return resolve_handle_to_channel_id(key.split("/",1)[1])
+
+    # 그냥 @handle 입력된 경우
     if token.startswith("@"):
         return resolve_handle_to_channel_id(token[1:])
-    return resolve_handle_to_channel_id(token)
 
+    return resolve_handle_to_channel_id(token)
 
 @st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
 def playlist_recent_video_ids(playlist_id: str, published_after_utc: str) -> List[Tuple[str, str]]:
