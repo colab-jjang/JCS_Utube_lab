@@ -1,5 +1,3 @@
-됐어 일단 이게 최종버전으로 알아둬
-
 import os
 import io
 import re
