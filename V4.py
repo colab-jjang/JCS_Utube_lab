@@ -678,16 +678,17 @@ if wl_file:
         else:
             df_w = pd.read_excel(wl_file)
 
-        cols = [c.lower() for c in df_w.columns]
-        raw_list = []
+        cols = {c.strip().lower(): c for c in df_w.columns}
+
         if "channel_id" in cols:
-            raw_list = [str(x) for x in df_w["channel_id"].dropna().tolist()]
+            raw_list = [str(x) for x in df_w[cols["channel_id"]].dropna().tolist()]
         elif "handle" in cols:
-            raw_list = [f"@{str(x).lstrip('@')}" for x in df_w["handle"].dropna().tolist()]
+            raw_list = [f"@{str(x).lstrip('@')}" for x in df_w[cols["handle"]].dropna().tolist()]
         elif "url" in cols:
-            raw_list = [str(x) for x in df_w["url"].dropna().tolist()]
+            raw_list = [str(x) for x in df_w[cols["url"]].dropna().tolist()]
         else:
             st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
+
 
         # === 여기서 ID 변환 ===
         added = []
