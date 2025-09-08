@@ -692,10 +692,10 @@ if wl_file:
         # === 여기서 ID 변환 ===
         added = []
         for tok in raw_list:
-            st.write("RAW:", repr(tok))
             cid = extract_channel_id(tok)
-            st.write("EXTRACT:", tok, "→", cid)
-
+            st.write("DEBUG:", tok, "→", cid)   # ← 변환 확인
+            if cid:
+                added.append(cid)
 
         wl_ids.update(added)
         st.session_state["whitelist_ids"] = wl_ids
