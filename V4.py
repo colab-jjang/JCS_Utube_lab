@@ -10,7 +10,6 @@ import requests
 import pandas as pd
 import streamlit as st
 
-from urllib.parse import unquote
 
 # ==== Cloud backend (read-only, Gist) ====
 def _gist_headers():
@@ -661,8 +660,7 @@ if wl_ids:
 
 # 업로드 (CSV/XLSX)
 wl_file = st.file_uploader(
-    "CSV 또는 XLSX 업로드 (channel_id / handle / url)", 
-    type=["csv", "xlsx"], key="whitelist_file"
+    "CSV 또는 XLSX 업로드 (channel_id / handle / url)", type=["csv", "xlsx"], key="whitelist_file"
 )
 if wl_file:
     try:
@@ -671,7 +669,10 @@ if wl_file:
         else:
             df_w = pd.read_excel(wl_file)
 
-        cols = [c.lower() for c in df_w.columns]
+        # ▶▶ 추가: 컬럼명 정규화(양끝 공백 제거 + 소문자)
+        df_w.columns = [str(c).strip().lower() for c in df_w.columns]
+
+        cols = list(df_w.columns)
         raw_list = []
         if "channel_id" in cols:
             raw_list = [str(x) for x in df_w["channel_id"].dropna().tolist()]
@@ -682,23 +683,18 @@ if wl_file:
         else:
             st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
 
-        # === 여기서 ID 변환 ===
         added = []
         for tok in raw_list:
             cid = extract_channel_id(tok)
             if cid:
                 added.append(cid)
 
-        wl_ids.update(added)
-        st.session_state["whitelist_ids"] = wl_ids
-
-        # === ID → 채널명 매핑 ===
-        df_titles = fetch_channel_titles(list(added))
-        if not df_titles.empty:
-            st.session_state["_id2title"] = {r["channel_id"]: r["channel_title"] for _, r in df_titles.iterrows()}
-
-        st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
-
+        if added:
+            wl_ids.update(added)
+            st.session_state["whitelist_ids"] = wl_ids
+            st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+        else:
+            st.warning("파일에서 유효한 채널을 0개 추출했습니다. (헤더/URL 형식 확인)")
     except Exception as e:
         st.warning(f"화이트리스트 파일 파싱 오류: {e}")
 
