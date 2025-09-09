@@ -597,8 +597,22 @@ def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: se
         if not key or key in banned_words or len(key) < 2:
             continue
         freq[key] = freq.get(key, 0) + 1
-        display.setdefault(key, p)
-    ranked = sorted(freq.items(), key=lambda x: x[1], reverse=True)[: top_k]
+        # 긴 표현일수록 대표어로 선택
+        if key not in display or len(p) > len(display[key]):
+            display[key] = p
+
+    # === 여기서 중복 제거 ===
+    final_freq = {}
+    for k, c in freq.items():
+        skip = False
+        for other in freq:
+            if other != k and k in other and freq[other] >= c:
+                skip = True
+                break
+        if not skip:
+            final_freq[k] = c
+
+    ranked = sorted(final_freq.items(), key=lambda x: x[1], reverse=True)[: top_k]
     return [(display[k], c) for k, c in ranked]
 
 
