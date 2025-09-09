@@ -266,7 +266,7 @@ def persist_whitelist(ch_ids: set):
 # =========================================================
 @st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
 def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, dict]:
-    """뉴스·정치(25) mostPopular → 후단에서 24h + Shorts(≤60s) 필터"""
+    """뉴스·정치(25) mostPopular → 후단에서 12h + Shorts(≤60s) 필터"""
     if not YOUTUBE_API_KEY:
         return {}
     quota = get_quota()
@@ -499,7 +499,7 @@ def global_search_recent(query: str, published_after_utc: str, max_pages: int = 
 
 @st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
 def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, dict]:
-    """뉴스·정치(25) mostPopular → 후단에서 24h + Shorts(≤60s) 필터"""
+    """뉴스·정치(25) mostPopular → 후단에서 12h + Shorts(≤60s) 필터"""
     if not YOUTUBE_API_KEY:
         return {}
     quota = get_quota()
@@ -607,7 +607,7 @@ def aggregate_keywords(rows: List[dict], banned_patterns: List[str], banned_word
 
 # --- Helper: 화이트리스트 키워드 랭킹 생성 ---
 def build_keyword_ranking(rows_all: List[Dict], banned_patterns: List[str], banned_words: set, top_k: int = 300) -> pd.DataFrame:
-    """화이트리스트 채널에서 24h 수집된 모든 Shorts를 기반으로 키워드 랭킹 구성.
+    """화이트리스트 채널에서 12h 수집된 모든 Shorts를 기반으로 키워드 랭킹 구성.
     각 키워드:
       - channel_overlap: 키워드가 등장한 '서로 다른 채널' 수
       - top_view_count: 그 키워드 포함 영상 중 최대 조회수
@@ -670,7 +670,7 @@ with st.sidebar:
     metric = st.selectbox("정렬 기준", ["view_count", "views_per_hour", "comment_count", "like_count"], index=0)
     ascending = st.toggle("오름차순 정렬", value=False)
 
-    st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 24시간(고정) • Shorts ≤ 60초(고정)")
+    st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 12시간(고정) • Shorts ≤ 60초(고정)")
 
 if st.button("저장된 화이트리스트 보기", use_container_width=True):
     wl_cloud = cloud_load_whitelist()
@@ -818,7 +818,7 @@ if data_source == "등록 채널 랭킹":
     mode = st.radio("채널 입력 방식", ["수동 입력", "파일 업로드(CSV/XLSX)"], horizontal=True)
 elif data_source == "전역 키워드 검색":
     st.subheader("전역 키워드 검색")
-    global_query = st.text_input("검색어(24h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
+    global_query = st.text_input("검색어(12h 내, Shorts)", placeholder="예) 국회, 대선, 경제, 외교, 안보 ...")
     max_pages = st.slider("검색 페이지 수(쿼터 주의)", 1, 5, 1)
 else:
     st.subheader("전체 트렌드(뉴스·정치)")
@@ -833,7 +833,7 @@ user_stops = COMMON_STOPWORDS
 # 본문: 실행/수집
 # ---------------------------------------------------------
 now_utc = dt.datetime.now(dt.timezone.utc)
-published_after_utc = (now_utc - dt.timedelta(hours=24)).isoformat()
+published_after_utc = (now_utc - dt.timedelta(hours=12)).isoformat()
 go = st.button("수집/갱신 실행", type="primary")
 
 # 등록 채널 입력(필요 시)
@@ -890,7 +890,7 @@ if go:
                     pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
                 except:
                     continue
-                # 24h + Shorts 필터
+                # 12h + Shorts 필터
                 if pub_dt < dt.datetime.fromisoformat(published_after_utc):
                     continue
                 if dur > 60:
@@ -1052,7 +1052,7 @@ if go:
         # ---- 출력/CSV/키워드 ----
         df = pd.DataFrame(rows)
         if df.empty:
-            st.info("조건에 맞는 24시간 내 Shorts 데이터가 없습니다.")
+            st.info("조건에 맞는 12시간 내 Shorts 데이터가 없습니다.")
         else:
             sort_by = metric if metric in df.columns else "view_count"
             df_sorted = df.sort_values(by=sort_by, ascending=ascending, kind="mergesort").reset_index(drop=True)
@@ -1100,7 +1100,7 @@ if go:
             )
 
             # ===== 추가: 화이트리스트 키워드 랭킹(요청 사양) =====
-            st.subheader("화이트리스트 키워드 랭킹 (24h, 조회수 오름차순)")
+            st.subheader("화이트리스트 키워드 랭킹 (12h, 조회수 오름차순)")
             kw_rank_df = build_keyword_ranking(rows, user_patterns, user_stops, top_k=300)
             if kw_rank_df.empty:
                 st.info("키워드가 추출되지 않았습니다.")
@@ -1111,7 +1111,7 @@ if go:
                 st.download_button(
                     "키워드 랭킹 CSV 다운로드",
                     data=kwr_buf.getvalue().encode("utf-8-sig"),
-                    file_name="keyword_ranking_24h.csv",
+                    file_name="keyword_ranking_12h.csv",
                     mime="text/csv",
                 )
 
@@ -1144,4 +1144,4 @@ with c3:
     st.metric("리셋까지", f"{h:02d}:{m:02d}:{s:02d}")
 
 st.caption("※ 실제 쿼터는 Google Cloud Console 기준이며, 이 값은 세션 내 추정치입니다.")
-st.caption("© v4 · Shorts 전용(≤60s), 24시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
+st.caption("© v4 · Shorts 전용(≤60s), 12시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
