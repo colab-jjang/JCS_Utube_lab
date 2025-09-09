@@ -1,19 +1,4 @@
-import os
-import io
-import re
-import json
-import datetime as dt
-from typing import List, Dict, Tuple, Optional
-from zoneinfo import ZoneInfo
 
-import requests
-import pandas as pd
-import streamlit as st
-
-from urllib.parse import unquote
-
-# ==== Cloud backend (read-only, Gist) ====
-def _gist_headers():
     tok = st.secrets.get("GH_TOKEN", "")
     return {"Authorization": f"token {tok}"} if tok else {}
 
@@ -21,7 +6,6 @@ def _gist_endpoint(gist_id: str) -> str:
     return f"https://api.github.com/gists/{gist_id}"
 
 def cloud_load_whitelist() -> Optional[set] :
-    """Gist에서 whitelist_channels.json 읽어 set으로 반환. 실패 시 None."""
     gist_id = st.secrets.get("GIST_ID")
     fname = st.secrets.get("GIST_FILENAME", "whitelist_channels.json")
     if not gist_id:
@@ -43,7 +27,6 @@ def cloud_load_whitelist() -> Optional[set] :
         return None
 
 def cloud_save_whitelist(ch_ids: set) -> bool:
-    """Gist에 화이트리스트 저장. 성공 True/실패 False."""
     gist_id = st.secrets.get("GIST_ID")
     fname = st.secrets.get("GIST_FILENAME", "whitelist_channels.json")
     if not gist_id:
@@ -67,26 +50,20 @@ def cloud_save_whitelist(ch_ids: set) -> bool:
         st.error(f"Gist 저장 예외: {e}")
         return False
 
-
 # =========================================================
 # 기본 상수/환경
 # =========================================================
 APP_TITLE = "유튜브 숏츠 키워드/영상 랭킹 v4"
 KST = ZoneInfo("Asia/Seoul")
-PT = ZoneInfo("America/Los_Angeles")  # YouTube 쿼터 리셋(PT 자정)
-TTL_SECS_DEFAULT = 3600  # 캐시 TTL: 1시간 고정
+PT = ZoneInfo("America/Los_Angeles")
+TTL_SECS_DEFAULT = 3600
 COL_ORDER = [
-    "title",
-    "view_count",
-    "length_mmss",
-    "channel",
-    "like_count",
-    "comment_count",
-    "published_at_kst",
+    "title","view_count","length_mmss","channel",
+    "like_count","comment_count","published_at_kst",
 ]
 
 YOUTUBE_API_KEY = (
-    (st.secrets.get("YOUTUBE_API_KEY", "") if hasattr(st, "secrets") else "") 
+    (st.secrets.get("YOUTUBE_API_KEY", "") if hasattr(st, "secrets") else "")
     or os.getenv("YOUTUBE_API_KEY", "")
 ).strip()
 
@@ -161,15 +138,40 @@ EN_STOP = {
 }
 
 # =========================================================
-# 쿼터 추정 (세션 내)
+# 쿼터 추정 (파일에 저장해서 유지)
 # =========================================================
+DATA_DIR = "."
+QUOTA_FILE = os.path.join(DATA_DIR, "quota_usage.json")
+
+def _today_pt_str():
+    now_pt = dt.datetime.now(PT)
+    return now_pt.strftime("%Y-%m-%d")
+
+def load_quota_used() -> int:
+    today = _today_pt_str()
+    if os.path.exists(QUOTA_FILE):
+        try:
+            data = json.loads(open(QUOTA_FILE, "r", encoding="utf-8").read())
+            if data.get("pt_date") == today:
+                return int(data.get("used", 0))
+        except Exception:
+            pass
+    return 0
+
+def save_quota_used(value: int):
+    data = {"pt_date": _today_pt_str(), "used": int(value)}
+    with open(QUOTA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
 class QuotaMeter:
-    COST = {"channels.list": 1, "playlistItems.list": 1, "videos.list": 1, "search.list": 100}
+    COST = {"channels.list": 1, "playlistItems.list": 1,
+            "videos.list": 1, "search.list": 100}
     def __init__(self, daily_budget: int = 10000):
         self.daily_budget = daily_budget
-        self.used_units = 0
+        self.used_units = load_quota_used()
     def add(self, api_name: str, calls: int = 1):
         self.used_units += self.COST.get(api_name, 1) * max(1, calls)
+        save_quota_used(self.used_units)
     @property
     def remaining(self):
         return max(0, self.daily_budget - self.used_units)
@@ -247,44 +249,52 @@ def persist_whitelist(ch_ids: set):
 # =========================================================
 # 유틸/파서
 # =========================================================
-@st.cache_data(show_spinner=False, ttl=24*3600)
-def fetch_channel_titles(channel_ids: list[str]) -> pd.DataFrame:
-    """채널ID -> 채널명 매핑 표. 50개씩 배치 요청(24h 캐시)."""
-    if not channel_ids or not YOUTUBE_API_KEY:
-        return pd.DataFrame(columns=["channel_id","channel_title"])
-    out = []
-    url = f"{API_BASE}/channels"
+@st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
+def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, dict]:
+    """뉴스·정치(25) mostPopular → 후단에서 24h + Shorts(≤60s) 필터"""
+    if not YOUTUBE_API_KEY:
+        return {}
     quota = get_quota()
-    for i in range(0, len(channel_ids), 50):
-        batch = channel_ids[i:i+50]
-        try:
-            r = requests.get(
-                url,
-                params={"key": YOUTUBE_API_KEY, "id": ",".join(batch), "part": "snippet"},
-                timeout=15,
-            )
-            quota.add("channels.list")
-            if r.status_code == 200:
-                for it in r.json().get("items", []):
-                    out.append({
-                        "channel_id": it.get("id",""),
-                        "channel_title": (it.get("snippet",{}) or {}).get("title",""),
-                    })
-        except Exception as e:
-            st.warning(f"채널명 조회 경고: {e}")
-    return pd.DataFrame(out)
-
+    url = f"{API_BASE}/videos"
+    params = {
+        "key": YOUTUBE_API_KEY,
+        "part": "snippet,contentDetails,statistics",
+        "chart": "mostPopular",
+        "videoCategoryId": "25",
+        "regionCode": region_code,
+        "maxResults": 50,
+    }
+    out: Dict[str, dict] = {}
+    page = 0
+    next_token = None
+    try:
+        while True:
+            if next_token:
+                params["pageToken"] = next_token
+            r = requests.get(url, params=params, timeout=20)
+            quota.add("videos.list")
+            if r.status_code != 200:
+                break
+            data = r.json()
+            for it in data.get("items", []):
+                out[it["id"]] = it
+            next_token = data.get("nextPageToken")
+            page += 1
+            if not next_token or page >= max_pages:
+                break
+    except Exception as e:
+        st.warning(f"트렌드 조회 경고: {e}")
+    return out
 
 def iso8601_to_seconds(iso_duration: str) -> int:
-    m = re.search(r"youtube\.com/(channel/[^/?#]+|c/[^/?#]+|user/[^/?#]+|@[^/?#]+)", token)
-
+    """ISO8601 duration → 초 단위로 변환"""
+    m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration or "")
     if not m:
         return 0
     h = int(m.group(1) or 0)
     mm = int(m.group(2) or 0)
     s = int(m.group(3) or 0)
     return h * 3600 + mm * 60 + s
-
 
 def sec_to_mmss(seconds: int) -> str:
     m = seconds // 60
