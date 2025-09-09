@@ -672,6 +672,42 @@ with st.sidebar:
 
     st.caption("캐시 TTL: 1시간(고정) • 수집 창: 최근 12시간(고정) • Shorts ≤ 60초(고정)")
 
+@st.cache_data(show_spinner=False, ttl=12*3600)
+def fetch_channel_titles(channel_ids: list[str]) -> pd.DataFrame:
+    """채널 ID 리스트 → 채널명 매핑 DataFrame.
+       YouTube API의 channels.list 호출 (50개씩 배치).
+       12시간 캐시 적용."""
+    if not channel_ids or not YOUTUBE_API_KEY:
+        return pd.DataFrame(columns=["channel_id", "channel_title"])
+    
+    out = []
+    url = f"{API_BASE}/channels"
+    quota = get_quota()
+    
+    for i in range(0, len(channel_ids), 50):
+        batch = channel_ids[i:i+50]
+        try:
+            r = requests.get(
+                url,
+                params={
+                    "key": YOUTUBE_API_KEY,
+                    "id": ",".join(batch),
+                    "part": "snippet",
+                },
+                timeout=15,
+            )
+            quota.add("channels.list")
+            if r.status_code == 200:
+                for it in r.json().get("items", []):
+                    out.append({
+                        "channel_id": it.get("id", ""),
+                        "channel_title": (it.get("snippet", {}) or {}).get("title", ""),
+                    })
+        except Exception as e:
+            st.warning(f"채널명 조회 경고: {e}")
+    
+    return pd.DataFrame(out)
+
 if st.button("저장된 화이트리스트 보기", use_container_width=True):
     wl_cloud = cloud_load_whitelist()
     if wl_cloud is None:
