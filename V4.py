@@ -1,4 +1,19 @@
+import os
+import io
+import re
+import json
+import datetime as dt
+from typing import List, Dict, Tuple, Optional
+from zoneinfo import ZoneInfo
 
+import requests
+import pandas as pd
+import streamlit as st
+
+from urllib.parse import unquote
+
+# ==== Cloud backend (read-only, Gist) ====
+def _gist_headers():
     tok = st.secrets.get("GH_TOKEN", "")
     return {"Authorization": f"token {tok}"} if tok else {}
 
