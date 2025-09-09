@@ -328,22 +328,21 @@ def extract_channel_id(token: str) -> Optional[str]:
     token = unquote(token).strip()
     token = re.sub(r"[/?#]+$", "", token)
 
-    # 직접 채널 ID (UC...)인 경우
+    # --- 추가: @handle URL 처리 ---
+    if "youtube.com/@" in token:
+        handle = token.split("youtube.com/@", 1)[1]
+        return resolve_handle_to_channel_id(handle)
+
     if token.startswith("UC") and len(token) >= 10:
         return token
 
-    # youtube.com URL 패턴
-    m = re.search(r"youtube\.com/(channel/[^/?#]+|c/[^/?#]+|user/[^/?#]+|@[^/?#]+)", token)
+    m = re.search(r"youtube\.com/(channel/|c/|user/|@)([^/?#]+)", token)
     if m:
-        key = m.group(1)
-        if key.startswith("channel/"):
-            return key.split("/",1)[1]
-        if key.startswith("@"):
-            return resolve_handle_to_channel_id(key[1:])  # '@' 빼고 API 조회
-        else:
-            return resolve_handle_to_channel_id(key.split("/",1)[1])
+        kind, key = m.group(1), m.group(2)
+        if kind == "channel/":
+            return key
+        return resolve_handle_to_channel_id(key)
 
-    # 그냥 @handle 입력된 경우
     if token.startswith("@"):
         return resolve_handle_to_channel_id(token[1:])
 
