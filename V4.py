@@ -705,8 +705,8 @@ if wl_file:
             st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
 
         # === [여기 삽입] 파일 컬럼/원본 리스트 확인 ===
-        st.write("파일 컬럼명:", df_w.columns.tolist())
-        st.write("raw_list (원본):", raw_list)
+        #st.write("파일 컬럼명:", df_w.columns.tolist())
+        #st.write("raw_list (원본):", raw_list)
 
         # === 여기서 ID 변환 ===
         added = []
@@ -716,7 +716,7 @@ if wl_file:
                 added.append(cid)
 
         # === [여기 삽입] 변환 결과 확인 ===
-        st.write("추출된 채널ID (added):", added)
+        #st.write("추출된 채널ID (added):", added)
         
         st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
         
