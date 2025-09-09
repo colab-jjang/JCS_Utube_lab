@@ -302,7 +302,7 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
         return None
     quota = get_quota()
     try:
-        # --- 우선 forHandle 엔드포인트 사용 ---
+        # --- 우선 forHandle 엔드포인트 ---
         url = f"{API_BASE}/channels"
         r = requests.get(
             url,
@@ -314,12 +314,13 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
             timeout=15,
         )
         quota.add("channels.list")
+        st.write(f"[DEBUG] forHandle={handle_or_name}, status={r.status_code}, json={r.json()}")  # 🔎 추가
         if r.status_code == 200:
             items = r.json().get("items", [])
             if items:
                 return items[0]["id"]
 
-        # --- fallback: 기존 search.list ---
+        # --- fallback: search.list ---
         r = requests.get(
             f"{API_BASE}/search",
             params={
@@ -332,6 +333,7 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
             timeout=15,
         )
         quota.add("search.list")
+        st.write(f"[DEBUG] search={handle_or_name}, status={r.status_code}, json={r.json()}")  # 🔎 추가
         if r.status_code == 200:
             items = r.json().get("items", [])
             if items:
