@@ -302,6 +302,24 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
         return None
     quota = get_quota()
     try:
+        # --- 우선 forHandle 엔드포인트 사용 ---
+        url = f"{API_BASE}/channels"
+        r = requests.get(
+            url,
+            params={
+                "key": YOUTUBE_API_KEY,
+                "forHandle": handle_or_name,
+                "part": "id,snippet",
+            },
+            timeout=15,
+        )
+        quota.add("channels.list")
+        if r.status_code == 200:
+            items = r.json().get("items", [])
+            if items:
+                return items[0]["id"]
+
+        # --- fallback: 기존 search.list ---
         r = requests.get(
             f"{API_BASE}/search",
             params={
@@ -321,7 +339,6 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
     except Exception as e:
         st.warning(f"채널 해석 경고: {e}")
     return None
-
 
 def extract_channel_id(token: str) -> Optional[str]:
     raw = (token or "").strip()
