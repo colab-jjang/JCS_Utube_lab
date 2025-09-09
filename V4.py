@@ -324,29 +324,47 @@ def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
 
 
 def extract_channel_id(token: str) -> Optional[str]:
-    token = (token or "").strip()
-    token = unquote(token).strip()
-    token = re.sub(r"[/?#]+$", "", token)
+    raw = (token or "").strip()
+    print(f"[DEBUG] 입력 token: {raw}")   # 디버그 로그
 
-    # --- 추가: @handle URL 처리 ---
+    token = unquote(raw).strip()
+    token = re.sub(r"[/?#]+$", "", token)
+    print(f"[DEBUG] 정리된 token: {token}")
+
+    # --- @handle URL 처리 ---
     if "youtube.com/@" in token:
         handle = token.split("youtube.com/@", 1)[1]
-        return resolve_handle_to_channel_id(handle)
+        print(f"[DEBUG] handle URL 감지 → {handle}")
+        cid = resolve_handle_to_channel_id(handle)
+        print(f"[DEBUG] API 변환 결과: {cid}")
+        return cid
 
     if token.startswith("UC") and len(token) >= 10:
+        print(f"[DEBUG] 직접 UC ID 감지 → {token}")
         return token
 
     m = re.search(r"youtube\.com/(channel/|c/|user/|@)([^/?#]+)", token)
     if m:
         kind, key = m.group(1), m.group(2)
+        print(f"[DEBUG] 일반 URL 매치 → kind={kind}, key={key}")
         if kind == "channel/":
             return key
-        return resolve_handle_to_channel_id(key)
+        cid = resolve_handle_to_channel_id(key)
+        print(f"[DEBUG] API 변환 결과: {cid}")
+        return cid
 
     if token.startswith("@"):
-        return resolve_handle_to_channel_id(token[1:])
+        print(f"[DEBUG] 단순 handle → {token}")
+        cid = resolve_handle_to_channel_id(token[1:])
+        print(f"[DEBUG] API 변환 결과: {cid}")
+        return cid
 
-    return resolve_handle_to_channel_id(token)
+    # fallback
+    print(f"[DEBUG] 기타 케이스 → {token}")
+    cid = resolve_handle_to_channel_id(token)
+    print(f"[DEBUG] API 변환 결과: {cid}")
+    return cid
+
 
 @st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
 def playlist_recent_video_ids(playlist_id: str, published_after_utc: str) -> List[Tuple[str, str]]:
