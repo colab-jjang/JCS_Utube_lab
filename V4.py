@@ -273,7 +273,7 @@ def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, di
     url = f"{API_BASE}/videos"
     params = {
     "key": YOUTUBE_API_KEY,
-    "q": query,
+    "q": "query",
     "type": "video",
     "part": "snippet",
     "maxResults": 50,
