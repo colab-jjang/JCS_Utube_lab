@@ -298,46 +298,25 @@ def parse_channel_input(text: str) -> List[str]:
 
 @st.cache_data(show_spinner=False, ttl=TTL_SECS_DEFAULT)
 def resolve_handle_to_channel_id(handle_or_name: str) -> Optional[str]:
+    """@handle 또는 커스텀 URL → 채널 ID 변환 (쿼터 1U만 소모)"""
     if not YOUTUBE_API_KEY:
         return None
     quota = get_quota()
     try:
-        # --- 우선 forHandle 엔드포인트 ---
-        url = f"{API_BASE}/channels"
         r = requests.get(
-            url,
+            f"{API_BASE}/channels",
             params={
                 "key": YOUTUBE_API_KEY,
-                "forHandle": handle_or_name,
-                "part": "id,snippet",
+                "forHandle": handle_or_name.lstrip("@"),
+                "part": "id",
             },
             timeout=15,
         )
-        quota.add("channels.list")
-        st.write(f"[DEBUG] forHandle={handle_or_name}, status={r.status_code}, json={r.json()}")  # 🔎 추가
+        quota.add("channels.list")  # 1U 소모
         if r.status_code == 200:
             items = r.json().get("items", [])
             if items:
                 return items[0]["id"]
-
-        # --- fallback: search.list ---
-        r = requests.get(
-            f"{API_BASE}/search",
-            params={
-                "key": YOUTUBE_API_KEY,
-                "q": handle_or_name,
-                "type": "channel",
-                "maxResults": 1,
-                "part": "snippet",
-            },
-            timeout=15,
-        )
-        quota.add("search.list")
-        st.write(f"[DEBUG] search={handle_or_name}, status={r.status_code}, json={r.json()}")  # 🔎 추가
-        if r.status_code == 200:
-            items = r.json().get("items", [])
-            if items:
-                return items[0]["id"]["channelId"]
     except Exception as e:
         st.warning(f"채널 해석 경고: {e}")
     return None
