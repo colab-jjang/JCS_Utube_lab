@@ -52,10 +52,10 @@ def add_quota(cost):
     current_file_val = load_quota_used()
     save_quota_used(current_file_val + int(cost))
 
-# ====== Time window (마지막 48시간, KST 기준) ======
-def kst_window_last_48h():
+# ====== Time window (마지막 12시간, KST 기준) ======
+def kst_window_last_12h():
     now_kst = dt.datetime.now(KST)
-    start_kst = now_kst - dt.timedelta(hours=48)
+    start_kst = now_kst - dt.timedelta(hours=12)
     start_utc = start_kst.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     end_utc   = now_kst.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     return start_utc, end_utc, now_kst
@@ -94,7 +94,7 @@ SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 
 def search_ids(keyword, max_pages=1):
-    start_iso, end_iso, _ = kst_window_last_48h()
+    start_iso, end_iso, _ = kst_window_last_12h()
     vids, token, pages = [], None, 0
     while True:
         params = {
@@ -174,8 +174,8 @@ else:
     st.session_state["quota_used"] = load_quota_used()
 
 # ====== UI ======
-st.set_page_config(page_title="YouTube Shorts 48h Finder", page_icon="📺", layout="wide")
-st.title("📺 48시간 이내 업로드된 YouTube Shorts 찾기 (KR)")
+st.set_page_config(page_title="YouTube Shorts 12h Finder", page_icon="📺", layout="wide")
+st.title("📺 12시간 이내 업로드된 YouTube Shorts 찾기 (KR)")
 
 if not API_KEY:
     st.error("⚠️ API 키가 설정되지 않았습니다. 좌측 메뉴(▶) > Settings > Secrets 에 YOUTUBE_API_KEY를 추가하세요.")
@@ -185,7 +185,7 @@ with st.sidebar:
     st.header("설정")
     keyword = st.text_input("검색어", "")
     max_pages = st.radio("검색 페이지 수(쿼터 절약)", options=[1,2], index=0)
-    st.caption("범위: 현재 시각(KST) 기준 **지난 48시간**")
+    st.caption("범위: 현재 시각(KST) 기준 **지난 12시간**")
     run_btn = st.button("검색 실행")
 
 # 쿼터 패널
@@ -221,6 +221,6 @@ if run_btn:
 
     csv_bytes = df_show.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("CSV 다운로드", data=csv_bytes,
-                       file_name=f"shorts_48h_{keyword}.csv", mime="text/csv")
+                       file_name=f"shorts_12h_{keyword}.csv", mime="text/csv")
 
     st.info(f"이번 실행으로 추정 사용량: search.list {100 * (max_pages)} + videos.list {1}")
