@@ -272,13 +272,20 @@ def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, di
     quota = get_quota()
     url = f"{API_BASE}/videos"
     params = {
-        "key": YOUTUBE_API_KEY,
-        "part": "snippet,contentDetails,statistics",
-        "chart": "mostPopular",
-        "videoCategoryId": "25",
-        "regionCode": region_code,
-        "maxResults": 50,
+    "key": YOUTUBE_API_KEY,
+    "q": query,
+    "type": "video",
+    "part": "snippet",
+    "maxResults": 50,
+    "order": "date",
+    "publishedAfter": published_after_utc,
+    "videoDuration": "short",
+    "relevanceLanguage": "ko",
+    "regionCode": "KR",
+    "videoCategoryId": "25",
+    "safeSearch": "none",
     }
+
     out: Dict[str, dict] = {}
     page = 0
     next_token = None
