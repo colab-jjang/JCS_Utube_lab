@@ -912,7 +912,7 @@ if go:
                 # 12h + Shorts 필터
                 if pub_dt < dt.datetime.fromisoformat(published_after_utc):
                     continue
-                if dur > 60:
+                if dur > 120:
                     continue
 
                 ch_id = sp.get("channelId", "")
