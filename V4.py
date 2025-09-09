@@ -287,14 +287,22 @@ def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, di
     return out
 
 def iso8601_to_seconds(iso_duration: str) -> int:
-    """ISO8601 duration → 초 단위로 변환"""
-    m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration or "")
-    if not m:
+    if not iso_duration or not iso_duration.startswith("PT"):
         return 0
-    h = int(m.group(1) or 0)
-    mm = int(m.group(2) or 0)
-    s = int(m.group(3) or 0)
-    return h * 3600 + mm * 60 + s
+    h = m = s = 0
+    num = ""
+    for ch in iso_duration[2:]:
+        if ch.isdigit():
+            num += ch
+        else:
+            if ch == "H":
+                h = int(num or 0)
+            elif ch == "M":
+                m = int(num or 0)
+            elif ch == "S":
+                s = int(num or 0)
+            num = ""
+    return h * 3600 + m * 60 + s
 
 def sec_to_mmss(seconds: int) -> str:
     m = seconds // 60
