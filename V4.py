@@ -919,8 +919,8 @@ if go:
                     if not pub:
                         continue
                     pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
-                    if pub_dt < dt.datetime.fromisoformat(published_after_utc):
-                        continue
+                    #if pub_dt < dt.datetime.fromisoformat(published_after_utc):
+                        #continue
         
                     views = int(stt.get("viewCount", 0) or 0)
                     likes = int(stt.get("likeCount", 0) or 0)
