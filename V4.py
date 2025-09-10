@@ -138,6 +138,7 @@ COMMON_STOPWORDS = {
     "ytn","연합뉴스","연합","한겨레","경향","국민일보","동아일보","조선일보","중앙일보","뉴시스","뉴스1","오마이뉴스","프레시안","sbs뉴스","kbs뉴스","mbc뉴스","jtbc뉴스",
     "관련영상","전체영상","풀영상","풀버전","요약본","다시보기","보도","특집","단신","단독보도","속보보도","생중계","중계","현장중계","인터뷰","직캠","클립","쇼츠",
     "shorts","short","live","full","eng","kor","sub","subs","4k","처리","언론","이미지","추석전","추석 전","미국","시작한다","본회","보도","freepik","전하겠다",
+    "영상","뉴스","관련","조회","채널","news",
 }
 COMMON_STOPWORDS.update({
     "한다","하기","합니다","했다","하였다","시작한다","시작합니다",
@@ -579,6 +580,18 @@ def extract_keywords(text: str, banned_patterns: List[str], banned_words: set, t
             if tt in EN_STOP:
                 continue
             en_tokens.append(tt)
+
+     # === 추가 필터링 ===
+    def is_valid_word(w: str) -> bool:
+        if len(w) < 2:  # 1글자 제거
+            return False
+        if w.isdigit():  # 숫자 제거
+            return False
+        if re.match(r"^[0-9]+[a-zA-Z]*$", w):  # ex: 00, 24h, 5g
+            return False
+        if w in banned_words:  # stopwords
+            return False
+        return True
 
     # stopwords 적용 + 최소 길이 필터
     ko_tokens = [t for t in ko_tokens if len(t) >= 2 and t not in banned_words]
@@ -1203,4 +1216,4 @@ with c3:
     st.metric("리셋까지", f"{h:02d}:{m:02d}:{s:02d}")
 
 st.caption("※ 실제 쿼터는 Google Cloud Console 기준이며, 이 값은 세션 내 추정치입니다.")
-st.caption("© v4 · Shorts 전용(≤60s), 24시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
+st.caption("© v4 · Shorts 전용, 24시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
