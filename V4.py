@@ -1070,7 +1070,7 @@ if go:
                     )
 
         # ---- 출력/CSV/키워드 ----
-try:
+
     df = pd.DataFrame(rows)
     if df.empty:
         st.info("조건에 맞는 24시간 내 Shorts 데이터가 없습니다.")
