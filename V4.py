@@ -1166,20 +1166,21 @@ if go:
             )
     
             # ===== 화이트리스트 키워드 랭킹 =====
-            st.subheader("화이트리스트 키워드 랭킹 (24h, 조회수 오름차순)")
-            kw_rank_df = build_keyword_ranking(rows, user_patterns, user_stops, top_k=300)
-            if kw_rank_df.empty:
-                st.info("키워드가 추출되지 않았습니다.")
-            else:
-                st.dataframe(kw_rank_df, use_container_width=True)
-                kwr_buf = io.StringIO()
-                kw_rank_df.to_csv(kwr_buf, index=False, encoding="utf-8-sig")
-                st.download_button(
-                    "키워드 랭킹 CSV 다운로드",
-                    data=kwr_buf.getvalue().encode("utf-8-sig"),
-                    file_name="keyword_ranking_24h.csv",
-                    mime="text/csv",
-                )
+            if data_source == "등록 채널 랭킹":
+                st.subheader("화이트리스트 키워드 랭킹 (24h, 조회수 오름차순)")
+                kw_rank_df = build_keyword_ranking(rows, user_patterns, user_stops, top_k=300)
+                if kw_rank_df.empty:
+                    st.info("키워드가 추출되지 않았습니다.")
+                else:
+                    st.dataframe(kw_rank_df, use_container_width=True)
+                    kwr_buf = io.StringIO()
+                    kw_rank_df.to_csv(kwr_buf, index=False, encoding="utf-8-sig")
+                    st.download_button(
+                        "키워드 랭킹 CSV 다운로드",
+                        data=kwr_buf.getvalue().encode("utf-8-sig"),
+                        file_name="keyword_ranking_24h.csv",
+                        mime="text/csv",
+                    )
     
     except Exception as e:
         st.warning(f"실행 도중 경고: {e}")
