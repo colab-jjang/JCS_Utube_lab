@@ -696,122 +696,122 @@ with st.sidebar:
         st.subheader("화이트리스트 관리")
 
     
-    #(1) 클라우드에서 불러오기 버튼
-    if st.button("저장된 화이트리스트 보기", use_container_width=True):
-        wl_cloud = cloud_load_whitelist()
-        if wl_cloud is None:
-            st.error("클라우드(Gist)에서 불러올 수 없습니다. (토큰/GIST_ID/파일명/네트워크 확인)")
-        else:
-            st.caption(f"클라우드 화이트리스트 채널 수: {len(wl_cloud)}개")
-            if len(wl_cloud) == 0:
-                st.info("클라우드에 현재 채널이 0개입니다. (저장 버튼으로 채널을 올려주세요)")
-            df_view = fetch_channel_titles(sorted(list(wl_cloud)))
-            if not df_view.empty:
-                st.dataframe(df_view[["channel_title"]], use_container_width=True, height=250)
+        #(1) 클라우드에서 불러오기 버튼
+        if st.button("저장된 화이트리스트 보기", use_container_width=True):
+            wl_cloud = cloud_load_whitelist()
+            if wl_cloud is None:
+                st.error("클라우드(Gist)에서 불러올 수 없습니다. (토큰/GIST_ID/파일명/네트워크 확인)")
             else:
-                # API 키 없거나 매핑 실패하면 ID라도 표시
-                st.dataframe(pd.DataFrame({"channel_title": sorted(list(wl_cloud))}),
-                             use_container_width=True, height=250)
-    
-    # (2) 업로드 (CSV/XLSX)
-    wl_file = st.file_uploader(
-        "CSV 또는 XLSX 업로드 (channel_id / handle / url)", 
-        type=["csv", "xlsx"], key="whitelist_file"
-    )
-    if wl_file:
-        try:
-            if wl_file.name.lower().endswith(".csv"):
-                df_w = pd.read_csv(wl_file)
-            else:
-                df_w = pd.read_excel(wl_file)
-    
-            cols = {c.strip().lower(): c for c in df_w.columns}
-    
-            if "channel_id" in cols:
-                raw_list = [str(x) for x in df_w[cols["channel_id"]].dropna().tolist()]
-            elif "handle" in cols:
-                raw_list = [f"@{str(x).lstrip('@')}" for x in df_w[cols["handle"]].dropna().tolist()]
-            elif "url" in cols:
-                raw_list = [str(x) for x in df_w[cols["url"]].dropna().tolist()]
-            else:
-                st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
-    
-            # === [여기 삽입] 파일 컬럼/원본 리스트 확인 ===
-            #st.write("파일 컬럼명:", df_w.columns.tolist())
-            #st.write("raw_list (원본):", raw_list)
-    
-            # === 여기서 ID 변환 ===
+                st.caption(f"클라우드 화이트리스트 채널 수: {len(wl_cloud)}개")
+                if len(wl_cloud) == 0:
+                    st.info("클라우드에 현재 채널이 0개입니다. (저장 버튼으로 채널을 올려주세요)")
+                df_view = fetch_channel_titles(sorted(list(wl_cloud)))
+                if not df_view.empty:
+                    st.dataframe(df_view[["channel_title"]], use_container_width=True, height=250)
+                else:
+                    # API 키 없거나 매핑 실패하면 ID라도 표시
+                    st.dataframe(pd.DataFrame({"channel_title": sorted(list(wl_cloud))}),
+                                 use_container_width=True, height=250)
+        
+        # (2) 업로드 (CSV/XLSX)
+        wl_file = st.file_uploader(
+            "CSV 또는 XLSX 업로드 (channel_id / handle / url)", 
+            type=["csv", "xlsx"], key="whitelist_file"
+        )
+        if wl_file:
+            try:
+                if wl_file.name.lower().endswith(".csv"):
+                    df_w = pd.read_csv(wl_file)
+                else:
+                    df_w = pd.read_excel(wl_file)
+        
+                cols = {c.strip().lower(): c for c in df_w.columns}
+        
+                if "channel_id" in cols:
+                    raw_list = [str(x) for x in df_w[cols["channel_id"]].dropna().tolist()]
+                elif "handle" in cols:
+                    raw_list = [f"@{str(x).lstrip('@')}" for x in df_w[cols["handle"]].dropna().tolist()]
+                elif "url" in cols:
+                    raw_list = [str(x) for x in df_w[cols["url"]].dropna().tolist()]
+                else:
+                    st.warning("CSV/XLSX에 channel_id / handle / url 컬럼 중 하나가 필요합니다.")
+        
+                # === [여기 삽입] 파일 컬럼/원본 리스트 확인 ===
+                #st.write("파일 컬럼명:", df_w.columns.tolist())
+                #st.write("raw_list (원본):", raw_list)
+        
+                # === 여기서 ID 변환 ===
+                added = []
+                for tok in raw_list: 
+                    cid = extract_channel_id(tok) 
+                    if cid: 
+                        added.append(cid)
+        
+                # === [여기 삽입] 변환 결과 확인 ===
+                #st.write("추출된 채널ID (added):", added)
+                
+                st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+                
+                wl_ids.update(added)
+                st.session_state["whitelist_ids"] = wl_ids
+        
+                # === ID → 채널명 매핑 ===
+                df_titles = fetch_channel_titles(list(added))
+                if not df_titles.empty:
+                    st.session_state["_id2title"] = {r["channel_id"]: r["channel_title"] for _, r in df_titles.iterrows()}
+        
+                st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
+        
+            except Exception as e:
+                st.warning(f"화이트리스트 파일 파싱 오류: {e}")
+        
+        # (3) 수동 추가/제거 UI (버튼 분리)
+        new_tokens = st.text_area("수동 추가 (@handle / URL / channel_id)", height=80, placeholder="@KBSNEWS, https://www.youtube.com/@jtbcnews")
+        if st.button("선택 추가", use_container_width=True):
             added = []
-            for tok in raw_list: 
-                cid = extract_channel_id(tok) 
-                if cid: 
+            for tok in parse_channel_input(new_tokens):
+                cid = extract_channel_id(tok)
+                if cid:
                     added.append(cid)
-    
-            # === [여기 삽입] 변환 결과 확인 ===
-            #st.write("추출된 채널ID (added):", added)
-            
-            st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
-            
             wl_ids.update(added)
             st.session_state["whitelist_ids"] = wl_ids
-    
-            # === ID → 채널명 매핑 ===
-            df_titles = fetch_channel_titles(list(added))
-            if not df_titles.empty:
-                st.session_state["_id2title"] = {r["channel_id"]: r["channel_title"] for _, r in df_titles.iterrows()}
-    
-            st.caption(f"추가된 채널 수: {len(added)} (총 {len(wl_ids)})")
-    
-        except Exception as e:
-            st.warning(f"화이트리스트 파일 파싱 오류: {e}")
-    
-    # (3) 수동 추가/제거 UI (버튼 분리)
-    new_tokens = st.text_area("수동 추가 (@handle / URL / channel_id)", height=80, placeholder="@KBSNEWS, https://www.youtube.com/@jtbcnews")
-    if st.button("선택 추가", use_container_width=True):
-        added = []
-        for tok in parse_channel_input(new_tokens):
-            cid = extract_channel_id(tok)
-            if cid:
-                added.append(cid)
-        wl_ids.update(added)
-        st.session_state["whitelist_ids"] = wl_ids
-        st.success(f"추가 완료: {len(added)}개 (총 {len(wl_ids)})")
-    
-    # 선택 삭제 (리스트에서 고르기)
-    # 이름으로 보이는 멀티셀렉트(내부 값은 ID)
-    id2title = st.session_state.get("_id2title", {})
-    selected_remove = st.multiselect(
-        "삭제할 채널 선택",
-        options=sorted(list(wl_ids)),
-        format_func=lambda cid: id2title.get(cid, cid)
-    )
-    col_rm1, col_rm2 = st.columns(2)
-    with col_rm1:
-        if st.button("선택 삭제", use_container_width=True, disabled=not bool(selected_remove)):
-            before = len(wl_ids)
-            wl_ids = {x for x in wl_ids if x not in set(selected_remove)}
-            st.session_state["whitelist_ids"] = wl_ids
-            st.success(f"제거 완료: {before - len(wl_ids)}개 (총 {len(wl_ids)})")
-    with col_rm2:
-        if st.button("전체 비우기", use_container_width=True, disabled=not bool(wl_ids)):
-            st.session_state["whitelist_ids"] = set()
-            wl_ids = set()
-            st.success("화이트리스트를 모두 비웠습니다.")
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("화이트리스트 저장", use_container_width=True):
-            ids_to_save = st.session_state.get("whitelist_ids", set())
-            st.caption(f"저장 시도: {len(ids_to_save)}개를 클라우드에 저장합니다.")
-            persist_whitelist(ids_to_save)
-    with c2:
-        if wl_ids:
-            wl_csv = io.StringIO()
-            pd.DataFrame({"channel_id": sorted(list(wl_ids))}).to_csv(wl_csv, index=False, encoding="utf-8-sig")
-            st.download_button("CSV 내려받기", wl_csv.getvalue().encode("utf-8-sig"), file_name="whitelist_channels.csv", mime="text/csv", use_container_width=True)
-    
-    st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
-    #------------- 여기까지------------------------------
+            st.success(f"추가 완료: {len(added)}개 (총 {len(wl_ids)})")
+        
+        # 선택 삭제 (리스트에서 고르기)
+        # 이름으로 보이는 멀티셀렉트(내부 값은 ID)
+        id2title = st.session_state.get("_id2title", {})
+        selected_remove = st.multiselect(
+            "삭제할 채널 선택",
+            options=sorted(list(wl_ids)),
+            format_func=lambda cid: id2title.get(cid, cid)
+        )
+        col_rm1, col_rm2 = st.columns(2)
+        with col_rm1:
+            if st.button("선택 삭제", use_container_width=True, disabled=not bool(selected_remove)):
+                before = len(wl_ids)
+                wl_ids = {x for x in wl_ids if x not in set(selected_remove)}
+                st.session_state["whitelist_ids"] = wl_ids
+                st.success(f"제거 완료: {before - len(wl_ids)}개 (총 {len(wl_ids)})")
+        with col_rm2:
+            if st.button("전체 비우기", use_container_width=True, disabled=not bool(wl_ids)):
+                st.session_state["whitelist_ids"] = set()
+                wl_ids = set()
+                st.success("화이트리스트를 모두 비웠습니다.")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("화이트리스트 저장", use_container_width=True):
+                ids_to_save = st.session_state.get("whitelist_ids", set())
+                st.caption(f"저장 시도: {len(ids_to_save)}개를 클라우드에 저장합니다.")
+                persist_whitelist(ids_to_save)
+        with c2:
+            if wl_ids:
+                wl_csv = io.StringIO()
+                pd.DataFrame({"channel_id": sorted(list(wl_ids))}).to_csv(wl_csv, index=False, encoding="utf-8-sig")
+                st.download_button("CSV 내려받기", wl_csv.getvalue().encode("utf-8-sig"), file_name="whitelist_channels.csv", mime="text/csv", use_container_width=True)
+        
+        st.caption(f"현재 적용 채널 수: **{len(wl_ids)}**")
+        #------------- 여기까지------------------------------
 
 # API 키 상태 배지(진단용)    
     st.caption(f"YouTube API Key: {'✅ 설정됨' if bool(YOUTUBE_API_KEY) else '❌ 없음'}")
