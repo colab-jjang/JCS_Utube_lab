@@ -694,8 +694,8 @@ with st.sidebar:
 
     if data_source == "등록 채널 랭킹":
         st.subheader("화이트리스트 관리")
-
-    
+        wl_ids = set(st.session_state.get("whitelist_ids", set()))
+            
         #(1) 클라우드에서 불러오기 버튼
         if st.button("저장된 화이트리스트 보기", use_container_width=True):
             wl_cloud = cloud_load_whitelist()
@@ -823,9 +823,6 @@ with st.sidebar:
         f"File: {st.secrets.get('GIST_FILENAME','(default)')}"
     )
 
-    # 화이트리스트 관리 (CSV + XLSX 지원)
- #   st.subheader("유튜버 화이트리스트")
-wl_ids = set(st.session_state.get("whitelist_ids", set()))
 
 # 현재 목록을 표 형식으로 보여주기 (채널명 위주 표시)
 if wl_ids:
