@@ -139,6 +139,11 @@ COMMON_STOPWORDS = {
     "관련영상","전체영상","풀영상","풀버전","요약본","다시보기","보도","특집","단신","단독보도","속보보도","생중계","중계","현장중계","인터뷰","직캠","클립","쇼츠",
     "shorts","short","live","full","eng","kor","sub","subs","4k","처리","언론","이미지","추석전","추석 전","미국","시작한다","본회","보도","freepik","전하겠다",
 }
+COMMON_STOPWORDS.update({
+    "한다","하기","전한다","시작한다",
+    "처리","언론","이미지","freepik",
+    "추석전","추석 전"
+})
 KO_JOSA = [
     "은","는","이","가","을","를","에","에서","에게","께","와","과","도","으로","로","에게서",
     "마다","부터","까지","조차","만","뿐","처럼","같이","보다","의","이라","라","이나","나",
@@ -596,6 +601,9 @@ def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: se
     for p in set(phrases):  # 같은 문서 내 중복 제거
         key = canon(p)
         if not key or key in banned_words or len(key) < 2:
+            continue
+        # === 불필요한 동사형/잡단어 필터 ===
+        if key.endswith(("다","하기","한다")):
             continue
         freq[key] = freq.get(key, 0) + 1
         display.setdefault(key, p)
