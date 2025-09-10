@@ -890,48 +890,71 @@ if go:
     rows: List[Dict] = []
     try:
         if data_source == "전체 트렌드(뉴스·정치)":
-            trend = trending_news_politics(region_code, max_pages=trend_pages)
-            for vid, it in trend.items():
-                cd = it.get("contentDetails", {})
-                sp = it.get("snippet", {}) or {}
-                stt = it.get("statistics", {}) or {}
-                dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                pub = sp.get("publishedAt")
-                if not pub:
-                    continue
-                pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+        # 1) 최근 72시간(또는 24h) 업로드된 뉴스·정치 Shorts 찾기
+        search_url = f"{API_BASE}/search"
+        params = {
+            "key": YOUTUBE_API_KEY,
+            "part": "snippet",
+            "type": "video",
+            "order": "date",
+            "maxResults": 50,
+            "publishedAfter": published_after_utc,
+            "videoDuration": "short",   # <= 4분 (후단에서 120초 필터)
+            "regionCode": region_code,
+        }
+        video_ids = []
+        for _ in range(trend_pages):
+            r = requests.get(search_url, params=params, timeout=20)
+            get_quota().add("search.list")
+            if r.status_code != 200:
+                break
+            data = r.json()
+            for it in data.get("items", []):
+                vid = it["id"]["videoId"]
+                video_ids.append(vid)
+            token = data.get("nextPageToken")
+            if not token:
+                break
+            params["pageToken"] = token
+    
+        # 2) 상세 정보 가져오기
+        details = fetch_videos_details(video_ids)
+        for vid, it in details.items():
+            cd = it.get("contentDetails", {})
+            sp = it.get("snippet", {}) or {}
+            stt = it.get("statistics", {}) or {}
+            dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
+            if dur > 120:   # 120초 이내만
+                continue
+            pub = sp.get("publishedAt")
+            if not pub:
+                continue
+            pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+    
+            views = int(stt.get("viewCount", 0) or 0)
+            likes = int(stt.get("likeCount", 0) or 0)
+            comments = int(stt.get("commentCount", 0) or 0)
+            hours = max((now_utc - pub_dt).total_seconds() / 3600, 1 / 60)
+            vph = views / hours
+            pub_kst = pub_dt.astimezone(KST)
+    
+            rows.append(
+                {
+                    "video_id": vid,
+                    "title": sp.get("title", ""),
+                    "description": sp.get("description", ""),
+                    "channel": sp.get("channelTitle", ""),
+                    "length_sec": dur,
+                    "length_mmss": sec_to_mmss(dur),
+                    "view_count": views,
+                    "like_count": likes,
+                    "comment_count": comments,
+                    "views_per_hour": vph,
+                    "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                }
+            )
 
-                # 24h + Shorts 필터
-                if pub_dt < dt.datetime.fromisoformat(published_after_utc):
-                    continue
-                if dur > 180:
-                    continue
-
-                ch_id = sp.get("channelId", "")
-
-                views = int(stt.get("viewCount", 0) or 0)
-                likes = int(stt.get("likeCount", 0) or 0)
-                comments = int(stt.get("commentCount", 0) or 0)
-                hours = max((now_utc - pub_dt).total_seconds() / 3600, 1 / 60)
-                vph = views / hours
-                pub_kst = pub_dt.astimezone(KST)
-
-                rows.append(
-                    {
-                        "video_id": vid,
-                        "title": sp.get("title", ""),
-                        "description": sp.get("description", ""),
-                        "channel": sp.get("channelTitle", ""),
-                        "length_sec": dur,
-                        "length_mmss": sec_to_mmss(dur),
-                        "view_count": views,
-                        "like_count": likes,
-                        "comment_count": comments,
-                        "views_per_hour": vph,
-                        "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
-                        "url": f"https://www.youtube.com/watch?v={vid}",
-                    }
-                )
 
         elif data_source == "전역 키워드 검색":
             if not global_query:
