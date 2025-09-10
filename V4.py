@@ -593,14 +593,12 @@ def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: se
 
     freq: Dict[str, int] = {}
     display: Dict[str, str] = {}
-    for p in phrases:
+    for p in set(phrases):  # 같은 문서 내 중복 제거
         key = canon(p)
         if not key or key in banned_words or len(key) < 2:
             continue
         freq[key] = freq.get(key, 0) + 1
-        # 긴 표현일수록 대표어로 선택
-        if key not in display or len(p) > len(display[key]):
-            display[key] = p
+        display.setdefault(key, p)
 
     # === 여기서 중복 제거 ===
     final_freq = {}
