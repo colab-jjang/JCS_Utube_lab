@@ -846,7 +846,7 @@ user_stops = COMMON_STOPWORDS
 # 본문: 실행/수집
 # ---------------------------------------------------------
 now_utc = dt.datetime.now(dt.timezone.utc)
-published_after_utc = (now_utc - dt.timedelta(hours=72)).isoformat()
+published_after_utc = (now_utc - dt.timedelta(hours=24)).isoformat()
 go = st.button("수집/갱신 실행", type="primary")
 
 # 등록 채널 입력(필요 시)
