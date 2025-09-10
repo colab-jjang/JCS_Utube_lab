@@ -1078,14 +1078,14 @@ if go:
             df_top = df_sorted.head(20)
 
                 # ===== 화이트리스트 전체 영상 중 조회수 Top N =====
-    st.subheader("화이트리스트 전체 조회수 Top 영상")
-    if not df.empty:
-        # 조회수 내림차순으로 정렬
-        df_views = df.sort_values(by="view_count", ascending=False).reset_index(drop=True)
-        df_top_views = df_views.head(20)   # Top 20개
-        
-        show_cols_views = [c for c in COL_ORDER if c in df_top_views.columns] + ["url"]
-        st.dataframe(df_top_views[show_cols_views], use_container_width=True)
+        st.subheader("화이트리스트 전체 조회수 Top 영상")
+        if not df.empty:
+            # 조회수 내림차순으로 정렬
+            df_views = df.sort_values(by="view_count", ascending=False).reset_index(drop=True)
+            df_top_views = df_views.head(20)   # Top 20개
+            
+            show_cols_views = [c for c in COL_ORDER if c in df_top_views.columns] + ["url"]
+            st.dataframe(df_top_views[show_cols_views], use_container_width=True)
 
         # CSV 다운로드 버튼
         csv_buf2 = io.StringIO()
