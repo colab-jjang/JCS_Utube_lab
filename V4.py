@@ -563,7 +563,7 @@ def trim_josa_ko(token: str) -> str:
     return token
 
 
-def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: set, top_k: int = 20):
+def extract_keywords(text: str, banned_patterns: List[str], banned_words: set, top_k: int = 20):
     if not text:
         return []
     text = normalize_text(text)
@@ -579,16 +579,12 @@ def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: se
             if tt in EN_STOP:
                 continue
             en_tokens.append(tt)
+
+    # stopwords 적용 + 최소 길이 필터
     ko_tokens = [t for t in ko_tokens if len(t) >= 2 and t not in banned_words]
     en_tokens = [t for t in en_tokens if len(t) >= 2 and t not in banned_words]
 
-    def ngrams(seq, n):
-        return [" ".join(seq[i : i + n]) for i in range(len(seq) - n + 1)]
-
-    phrases = []
-    phrases += ko_tokens + en_tokens
-    phrases += ngrams(ko_tokens, 2) + ngrams(ko_tokens, 3)
-    phrases += ngrams(en_tokens, 2) + ngrams(en_tokens, 3)
+    phrases = ko_tokens + en_tokens   # 🚨 여기서 ngrams 제거!
 
     def canon(p):
         c = re.sub(r"\s+", "", p.lower())
@@ -598,39 +594,24 @@ def extract_noun_phrases(text: str, banned_patterns: List[str], banned_words: se
 
     freq: Dict[str, int] = {}
     display: Dict[str, str] = {}
-    for p in set(phrases):  # 같은 문서 내 중복 제거
+    for p in set(phrases):
         key = canon(p)
         if not key or key in banned_words or len(key) < 2:
             continue
-        # === 불필요한 동사형/잡단어 필터 ===
-        if key.endswith(("다","하기","한다","합니다","하였다")):
+        if key.endswith(("다","한다","하기","합니다","하였다")):  # 동사형 제거
             continue
-        if key in {"전한다","전합니다","시작한다","시작합니다"}:
-        continue
         freq[key] = freq.get(key, 0) + 1
         display.setdefault(key, p)
 
-    # === 여기서 중복 제거 ===
-    final_freq = {}
-    for k, c in freq.items():
-        skip = False
-        for other in freq:
-            if other != k and k in other and freq[other] >= c:
-                skip = True
-                break
-        if not skip:
-            final_freq[k] = c
-
-    ranked = sorted(final_freq.items(), key=lambda x: x[1], reverse=True)[: top_k]
+    ranked = sorted(freq.items(), key=lambda x: x[1], reverse=True)[: top_k]
     return [(display[k], c) for k, c in ranked]
-
 
 def aggregate_keywords(rows: List[dict], banned_patterns: List[str], banned_words: set, top_k: int = 20):
     blob = []
     for r in rows:
         blob.append(r.get("title", ""))
         blob.append(r.get("description", ""))
-    pairs = extract_noun_phrases("\n".join(blob), banned_patterns, banned_words, top_k=top_k)
+    pairs = extract_keywords("\n".join(blob), banned_patterns, banned_words, top_k=top_k)
     return pd.DataFrame([{"keyword": k, "count": c} for k, c in pairs])
 
 # --- Helper: 화이트리스트 키워드 랭킹 생성 ---
