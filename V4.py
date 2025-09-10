@@ -1078,15 +1078,15 @@ try:
         sort_by = metric if metric in df.columns else "view_count"
         df_sorted = df.sort_values(by=sort_by, ascending=ascending, kind="mergesort").reset_index(drop=True)
         df_top = df_sorted.head(20)
-    
+
         # ===== 화이트리스트 전체 영상 중 조회수 Top N =====
         st.subheader("화이트리스트 전체 조회수 Top 영상")
         df_views = df.sort_values(by="view_count", ascending=False).reset_index(drop=True)
         df_top_views = df_views.head(20)
-    
+
         show_cols_views = [c for c in COL_ORDER if c in df_top_views.columns] + ["url"]
         st.dataframe(df_top_views[show_cols_views], use_container_width=True)
-    
+
         # CSV 다운로드 버튼
         csv_buf2 = io.StringIO()
         df_top_views[show_cols_views].to_csv(csv_buf2, index=False, encoding="utf-8-sig")
@@ -1096,12 +1096,12 @@ try:
             file_name="whitelist_top20_views.csv",
             mime="text/csv",
         )
-    
+
         # ===== 기존 Top 20 랭킹 =====
         show_cols = [c for c in COL_ORDER if c in df_top.columns]
         st.subheader("Top 20 랭킹")
         st.dataframe(df_top[show_cols], use_container_width=True)
-    
+
         # 영상 Top20 CSV (링크 포함)
         csv_buf = io.StringIO()
         out_cols = [
@@ -1121,7 +1121,7 @@ try:
             file_name="shorts_top20.csv",
             mime="text/csv",
         )
-    
+
         # ===== 키워드 Top20 =====
         kw_df = aggregate_keywords(
             rows=df_top.to_dict(orient="records"),
@@ -1138,7 +1138,7 @@ try:
             file_name="keywords_top20.csv",
             mime="text/csv",
         )
-    
+
         # ===== 화이트리스트 키워드 랭킹 =====
         st.subheader("화이트리스트 키워드 랭킹 (24h, 조회수 오름차순)")
         kw_rank_df = build_keyword_ranking(rows, user_patterns, user_stops, top_k=300)
@@ -1156,7 +1156,8 @@ try:
             )
 
 except Exception as e:
-        st.warning(f"실행 도중 경고: {e}")
+    st.warning(f"실행 도중 경고: {e}")
+
 
 # ---------------------------------------------------------
 # 쿼터 현황(세션 추정)
