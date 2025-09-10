@@ -899,14 +899,12 @@ if go:
                 pub = sp.get("publishedAt")
                 if not pub:
                     continue
-                try:
-                    pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
-                except:
-                    continue
+                pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+
                 # 24h + Shorts 필터
                 if pub_dt < dt.datetime.fromisoformat(published_after_utc):
                     continue
-                if dur > 240:
+                if dur > 60:
                     continue
 
                 ch_id = sp.get("channelId", "")
