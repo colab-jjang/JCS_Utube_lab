@@ -904,7 +904,7 @@ if go:
                 # 24h + Shorts 필터
                 if pub_dt < dt.datetime.fromisoformat(published_after_utc):
                     continue
-                if dur > 90:
+                if dur > 120:
                     continue
 
                 ch_id = sp.get("channelId", "")
@@ -944,7 +944,7 @@ if go:
                     sp = it.get("snippet", {}) or {}
                     stt = it.get("statistics", {}) or {}
                     dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                    if dur > 90:
+                    if dur > 120:
                         continue
                     pub = sp.get("publishedAt")
                     if not pub:
@@ -1028,7 +1028,7 @@ if go:
                     sp = it.get("snippet", {}) or {}
                     stt = it.get("statistics", {}) or {}
                     dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                    if dur > 90:
+                    if dur > 120:
                         continue
                     ch_id = sp.get("channelId", "")
                     wl = st.session_state.get("whitelist_ids", set())
