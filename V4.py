@@ -848,7 +848,7 @@ user_stops = COMMON_STOPWORDS
 # 본문: 실행/수집
 # ---------------------------------------------------------
 now_utc = dt.datetime.now(dt.timezone.utc)
-published_after_utc = (now_utc - dt.timedelta(hours=24)).isoformat()
+published_after_utc = (now_utc - dt.timedelta(hours=12)).isoformat()
 go = st.button("수집/갱신 실행", type="primary")
 
 # 등록 채널 입력(필요 시)
@@ -1216,4 +1216,4 @@ with c3:
     st.metric("리셋까지", f"{h:02d}:{m:02d}:{s:02d}")
 
 st.caption("※ 실제 쿼터는 Google Cloud Console 기준이며, 이 값은 세션 내 추정치입니다.")
-st.caption("© v4 · Shorts 전용, 24시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
+st.caption("© v4 · Shorts 전용, 12시간 내 업로드, 캐시 TTL=1h, 오류 시 경고만 출력")
