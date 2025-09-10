@@ -1113,14 +1113,14 @@ if go:
      #       st.dataframe(df_top_views[show_cols_views], use_container_width=True)
     
             # CSV 다운로드 버튼
-            csv_buf2 = io.StringIO()
-            df_top_views[show_cols_views].to_csv(csv_buf2, index=False, encoding="utf-8-sig")
-            st.download_button(
-                "화이트리스트 Top20 조회수 CSV 다운로드",
-                data=csv_buf2.getvalue().encode("utf-8-sig"),
-                file_name="whitelist_top20_views.csv",
-                mime="text/csv",
-            )
+            #csv_buf2 = io.StringIO()
+            #df_top_views[show_cols_views].to_csv(csv_buf2, index=False, encoding="utf-8-sig")
+           # st.download_button(
+             #   "화이트리스트 Top20 조회수 CSV 다운로드",
+            #    data=csv_buf2.getvalue().encode("utf-8-sig"),
+           #     file_name="whitelist_top20_views.csv",
+            #    mime="text/csv",
+           # )
     
             # ===== 기존 Top 20 랭킹 =====
             show_cols = [c for c in COL_ORDER if c in df_top.columns]
