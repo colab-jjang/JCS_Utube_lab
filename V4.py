@@ -696,15 +696,17 @@ with st.sidebar:
         st.subheader("화이트리스트 관리")
         wl_ids = set(st.session_state.get("whitelist_ids", set()))
             
-        #(1) 클라우드에서 불러오기 버튼
-        if st.button("저장된 화이트리스트 보기", use_container_width=True):
-            wl_cloud = cloud_load_whitelist()
-            if wl_cloud is None:
-                st.error("클라우드(Gist)에서 불러올 수 없습니다. (토큰/GIST_ID/파일명/네트워크 확인)")
+       # (1) 클라우드에서 불러오기 버튼
+    if st.button("저장된 화이트리스트 보기", use_container_width=True):
+        wl_cloud = cloud_load_whitelist()
+        if wl_cloud is None:
+            st.error("클라우드(Gist)에서 불러올 수 없습니다. (토큰/GIST_ID/파일명/네트워크 확인)")
+        else:
+            st.caption(f"클라우드 화이트리스트 채널 수: {len(wl_cloud)}개")
+    
+            if len(wl_cloud) == 0:
+                st.info("클라우드에 현재 채널이 0개입니다. (저장 버튼으로 채널을 올려주세요)")
             else:
-                st.caption(f"클라우드 화이트리스트 채널 수: {len(wl_cloud)}개")
-                if len(wl_cloud) == 0:
-                    st.info("클라우드에 현재 채널이 0개입니다. (저장 버튼으로 채널을 올려주세요)")
                 df_view = fetch_channel_titles(sorted(list(wl_cloud)))
                 if not df_view.empty:
                     st.dataframe(df_view[["channel_title"]], use_container_width=True, height=250)
@@ -712,7 +714,7 @@ with st.sidebar:
                     # API 키 없거나 매핑 실패하면 ID라도 표시
                     st.dataframe(pd.DataFrame({"channel_title": sorted(list(wl_cloud))}),
                                  use_container_width=True, height=250)
-        
+
         # (2) 업로드 (CSV/XLSX)
         wl_file = st.file_uploader(
             "CSV 또는 XLSX 업로드 (channel_id / handle / url)", 
@@ -823,17 +825,6 @@ with st.sidebar:
         f"File: {st.secrets.get('GIST_FILENAME','(default)')}"
     )
 
-
-# 현재 목록을 표 형식으로 보여주기 (채널명 위주 표시)
-if wl_ids:
-    df_wv = fetch_channel_titles(sorted(list(wl_ids)))
-    if df_wv.empty:
-        # API 키가 없거나 오류 시 ID만이라도 표시
-        st.dataframe(pd.DataFrame({"channel": sorted(list(wl_ids))}).rename(columns={"channel":"channel_title"}), use_container_width=True, height=220)
-    else:
-        st.dataframe(df_wv[["channel_title"]], use_container_width=True, height=220)
-        # ID→이름 매핑을 세션에 보관(삭제 UI 등에서 사용)
-        st.session_state["_id2title"] = {r["channel_id"]: r["channel_title"] for _, r in df_wv.iterrows()}
 
     # 모드별 입력
 if data_source == "등록 채널 랭킹":
