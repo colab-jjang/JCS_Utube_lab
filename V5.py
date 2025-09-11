@@ -72,6 +72,8 @@ def get_channel_title(channel_token):
         items = r.json().get("items", [])
         if items:
             return items[0]["snippet"]["title"]
+        else:
+            return "(추출 실패) " + token
     return channel_token
 
 def iso8601_to_seconds(iso):
