@@ -66,6 +66,18 @@ hour_limit = st.selectbox("최신 N시간 이내", [12,24], index=1)
 length_sec = st.selectbox("숏츠 최대 길이(초)", [60, 90, 120, 180], index=3)
 max_results = 50
 
+# 3. "키워드(검색어) 기반"만 검색어 입력창 보이도록!
+keyword = ""  # 변수 미리 준비
+if MODE == "키워드(검색어) 기반":
+    keyword = st.text_input("검색어(뉴스/정치 관련 단어 입력)", value="")  # 반드시 실행 버튼보다 위!
+
+# 4. 실행 버튼
+if st.button("최신 숏츠 트렌드 추출"):
+    # ... (공통 실행 로직)
+    if MODE == "키워드(검색어) 기반" and not keyword.strip():
+        st.warning("검색어를 입력해주세요.")
+        st.stop()
+
 # --- MODE 2: 화이트리스트 불러오기/업데이트
 if "whitelist" not in st.session_state:
     st.session_state.whitelist = []
