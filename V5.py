@@ -182,11 +182,15 @@ if MODE == "화이트리스트 채널":
                 st.session_state.whitelist_titles[token] = get_channel_title(token)
             st.success(f"불러옴: {len(loaded)}개")
     # 현재 채널명 기반 리스트 표시!
-    if st.session_state.whitelist:
-        st.markdown(
-            "현재 등록된 채널: " +
-            ", ".join([titles.get(x, x) for x in st.session_state.whitelist])
-        )
+    if wh:
+        df_list = []
+        for cid in wh:
+            df_list.append({
+                "채널명": titles.get(cid, cid),
+                "채널 ID": cid
+            })
+        df = pd.DataFrame(df_list)
+        st.dataframe(df, use_container_width=True)
     else:
         st.info("등록된 채널이 없습니다.")
 
