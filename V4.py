@@ -885,6 +885,7 @@ if data_source == "등록 채널 랭킹":
                 st.warning(f"채널 목록 파일 파싱 오류: {e}")
 
 if go:
+    st.write(f"go 상태: {go}")
     if not YOUTUBE_API_KEY:
         st.error("YouTube API 키가 없습니다. .streamlit/secrets.toml 또는 환경변수에 설정하세요.")
         st.stop()
@@ -1082,11 +1083,15 @@ if go:
                     )
 
         df = pd.DataFrame(rows)
-        st.session_state["last_rows"] = rows
-        st.session_state["last_df"] = df
+
+        st.write(f"rows 갯수: {len(rows)}")
+        st.write(f"df empty? {df.empty if 'df' in locals() else '생성전'}")
       
     except Exception as e:
         st.warning(f"실행 도중 경고: {e}")
+
+    st.session_state["last_rows"] = rows
+    st.session_state["last_df"] = df
 
 # ----------------------------------------------------
 # ✅ 출력부: 버튼 클릭 여부와 상관없이 세션 기준으로 동작
