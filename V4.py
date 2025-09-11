@@ -1081,9 +1081,9 @@ if go:
                         }
                     )
 
-            df = pd.DataFrame(rows)
-            st.session_state["last_rows"] = rows
-            st.session_state["last_df"] = df
+        df = pd.DataFrame(rows)
+        st.session_state["last_rows"] = rows
+        st.session_state["last_df"] = df
       
     except Exception as e:
         st.warning(f"실행 도중 경고: {e}")
