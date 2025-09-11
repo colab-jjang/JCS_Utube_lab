@@ -287,8 +287,8 @@ def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, di
     "publishedAfter": published_after_utc,
     "videoDuration": "short",
     "relevanceLanguage": "ko",
-    "regionCode": "KR",
-    "videoCategoryId": "25",
+    #"regionCode": "KR",
+    #"videoCategoryId": "25",
     "safeSearch": "none",
     }
 
