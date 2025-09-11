@@ -892,65 +892,67 @@ if go:
     rows: List[Dict] = []
     try:
         if data_source == "전체 트렌드(뉴스·정치)":
-            url = f"{API_BASE}/videos"
-            params = {
-                "key": YOUTUBE_API_KEY,
-                "part": "snippet,contentDetails,statistics",
-                "chart": "mostPopular",
-                "videoCategoryId": "25",   # 뉴스·정치
-                "regionCode": region_code,
-                "maxResults": 50,
-            }
-            video_ids = []
-            for _ in range(trend_pages):
-                r = requests.get(url, params=params, timeout=20)
-                get_quota().add("videos.list")
-                if r.status_code != 200:
-                    break
-                data = r.json()
-                for it in data.get("items", []):
-                    vid = it["id"]
-                    cd = it.get("contentDetails", {})
-                    sp = it.get("snippet", {}) or {}
-                    stt = it.get("statistics", {}) or {}
-        
-                    dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                    if dur > 120:   # Shorts 120초 이하
-                        continue
-                    pub = sp.get("publishedAt")
-                    if not pub:
-                        continue
-                    pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
-                    #if pub_dt < dt.datetime.fromisoformat(published_after_utc):
-                        #continue
-        
-                    views = int(stt.get("viewCount", 0) or 0)
-                    likes = int(stt.get("likeCount", 0) or 0)
-                    comments = int(stt.get("commentCount", 0) or 0)
-                    hours = max((now_utc - pub_dt).total_seconds() / 3600, 1 / 60)
-                    vph = views / hours
-                    pub_kst = pub_dt.astimezone(KST)
-        
-                    rows.append(
-                        {
-                            "video_id": vid,
-                            "title": sp.get("title", ""),
-                            "description": sp.get("description", ""),
-                            "channel": sp.get("channelTitle", ""),
-                            "length_sec": dur,
-                            "length_mmss": sec_to_mmss(dur),
-                            "view_count": views,
-                            "like_count": likes,
-                            "comment_count": comments,
-                            "views_per_hour": vph,
-                            "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
-                            "url": f"https://www.youtube.com/watch?v={vid}",
-                        }
-                    )
-                token = data.get("nextPageToken")
-                if not token:
-                    break
-                params["pageToken"] = token
+        url = f"{API_BASE}/search"
+        params = {
+            "key": YOUTUBE_API_KEY,
+            "part": "snippet",
+            "type": "video",
+            "order": "date",   # 최신 업로드 순
+            "publishedAfter": published_after_utc,
+            "videoDuration": "short",
+            "videoCategoryId": "25",  # 뉴스·정치
+            "regionCode": region_code,
+            "maxResults": 50,
+        }
+        video_ids = []
+        for _ in range(trend_pages):
+            r = requests.get(url, params=params, timeout=20)
+            get_quota().add("search.list")   # 쿼터: 100U
+            if r.status_code != 200:
+                break
+            data = r.json()
+            for it in data.get("items", []):
+                video_ids.append(it["id"]["videoId"])
+            token = data.get("nextPageToken")
+            if not token:
+                break
+            params["pageToken"] = token
+    
+        # 상세정보 조회 (조회수 등 가져오기)
+        details = fetch_videos_details(video_ids)
+        for vid, it in details.items():
+            cd = it.get("contentDetails", {})
+            sp = it.get("snippet", {}) or {}
+            stt = it.get("statistics", {}) or {}
+            dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
+            if dur > 120:
+                continue
+            pub = sp.get("publishedAt")
+            if not pub:
+                continue
+            pub_dt = dt.datetime.fromisoformat(pub.replace("Z", "+00:00"))
+            views = int(stt.get("viewCount", 0) or 0)
+            likes = int(stt.get("likeCount", 0) or 0)
+            comments = int(stt.get("commentCount", 0) or 0)
+            hours = max((now_utc - pub_dt).total_seconds() / 3600, 1/60)
+            vph = views / hours
+            pub_kst = pub_dt.astimezone(KST)
+    
+            rows.append({
+                "video_id": vid,
+                "title": sp.get("title", ""),
+                "description": sp.get("description", ""),
+                "channel": sp.get("channelTitle", ""),
+                "length_sec": dur,
+                "length_mmss": sec_to_mmss(dur),
+                "view_count": views,
+                "like_count": likes,
+                "comment_count": comments,
+                "views_per_hour": vph,
+                "published_at_kst": pub_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                "url": f"https://www.youtube.com/watch?v={vid}",
+            })
+
 
         elif data_source == "전역 키워드 검색":
             if not global_query:
