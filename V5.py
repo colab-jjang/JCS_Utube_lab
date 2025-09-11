@@ -34,56 +34,52 @@ def load_whitelist_from_gist(GIST_ID, GIST_TOKEN, filename="whitelist_channels.j
     data = json.loads(content)
     return data if isinstance(data, list) else []
 
-def iso8601_to_seconds(iso):
-    import re
-    m = re.match(r'PT((\d+)M)?((\d+)S)?', iso)
-    return int(m.group(2) or 0)*60 + int(m.group(4) or 0) if m else 0
-
+# ----------- 채널명 추출 함수 -----------
 def get_channel_title(channel_token):
-    # id, @handle, url 등 여러 케이스 지원
-    # handle/@, url, id 모두 지원
-    channel_id = None
     token = str(channel_token)
+    channel_id = None
     if token.startswith("UC") and len(token) > 10:  # UC id
         channel_id = token
-    elif token.startswith("@"):                       # handle
-        url = f"https://www.googleapis.com/youtube/v3/channels"
+    elif token.startswith("@"): 
+        url = "https://www.googleapis.com/youtube/v3/channels"
         r = requests.get(url, params={
             "key": API_KEY,
             "forHandle": token.lstrip("@"),
             "part": "snippet"
-        })
+        }, timeout=10)
         items = r.json().get("items", [])
         if items: channel_id = items[0]["id"]
     elif "youtube.com/" in token:
-        # url에서 id 따내기수
         import re
         m = re.search(r"/channel/(UC[\w-]+)", token)
         if m: channel_id = m.group(1)
         else:
             m = re.search(r"/@([a-zA-Z0-9._-]+)", token)
             if m:
-                url = f"https://www.googleapis.com/youtube/v3/channels"
+                url = "https://www.googleapis.com/youtube/v3/channels"
                 r = requests.get(url, params={
                     "key": API_KEY,
                     "forHandle": m.group(1),
                     "part": "snippet"
-                })
+                }, timeout=10)
                 items = r.json().get("items", [])
                 if items: channel_id = items[0]["id"]
-    # 이제 최종적으로 id로 channel title조회
     if channel_id:
-        url = f"https://www.googleapis.com/youtube/v3/channels"
+        url = "https://www.googleapis.com/youtube/v3/channels"
         r = requests.get(url, params={
             "key": API_KEY, "id": channel_id, "part": "snippet"
-        })
+        }, timeout=10)
         items = r.json().get("items", [])
         if items:
             return items[0]["snippet"]["title"]
     return channel_token
 
+def iso8601_to_seconds(iso):
+    import re
+    m = re.match(r'PT((\d+)M)?((\d+)S)?', iso)
+    return int(m.group(2) or 0)*60 + int(m.group(4) or 0) if m else 0
 
-# --------- UI 시작 ----------
+# ---------- UI ---------- 
 st.title("최신 유튜브 뉴스·정치 숏츠 수집기")
 
 MODE = st.radio("수집 모드 선택", [
@@ -99,20 +95,22 @@ if MODE != "화이트리스트 채널":
     length_sec = st.selectbox("숏츠 최대 길이(초)", [60, 90, 120, 180, 240, 300], index=3)
     published_after = (dt.datetime.utcnow() - dt.timedelta(hours=hour_limit)).isoformat("T") + "Z"
 else:
-    published_after = None  # 시간제한 두지 않음
+    published_after = None
     country = None
     length_sec = None
 
-# --- (키워드 입력창) ---
+# --- 키워드 입력 --- 
 keyword = ""
 if MODE == "키워드(검색어) 기반":
     keyword = st.text_input("검색어(뉴스/정치 관련 단어 입력)", value="")
 
-# --- (화이트리스트 관리: 업로드/수동/저장/삭제/불러오기) ---
+# ------- 화이트리스트 상태 초기화 ----------
 if "whitelist" not in st.session_state:
     st.session_state.whitelist = []
-    
+if "whitelist_titles" not in st.session_state:
+    st.session_state.whitelist_titles = {}
 
+# ------- 화이트리스트 관리 섹션 -------
 if MODE == "화이트리스트 채널":
     st.subheader("화이트리스트 업로드·편집·저장")
     tab1, tab2 = st.tabs(["CSV 업로드", "수동 입력"])
@@ -122,32 +120,38 @@ if MODE == "화이트리스트 채널":
             df = pd.read_csv(upl)
             ch_ids = df.iloc[:, 0].apply(lambda x: str(x).strip()).tolist()
             st.session_state.whitelist = list(sorted(set(ch_ids)))
-            if "whitelist_titles" not in st.session_state:
-                st.session_state["whitelist_titles"] = {}
-            unmapped = [x for x in st.session_state.whitelist if x not in st.session_state["whitelist_titles"]]
+            unmapped = [x for x in st.session_state.whitelist if x not in st.session_state.whitelist_titles]
             for token in unmapped:
-                st.session_state["whitelist_titles"][token] = get_channel_title(token)
+                st.session_state.whitelist_titles[token] = get_channel_title(token)
             st.success(f"{len(ch_ids)}개 채널 반영됨")
     with tab2:
         manual = st.text_area("채널 직접 입력(줄바꿈/쉼표가능)", height=100)
         if st.button("수동 채널 반영"):
             ch_ids = [x.strip() for x in manual.replace(",", "\n").split("\n") if x.strip()]
             st.session_state.whitelist = list(sorted(set(ch_ids)))
+            unmapped = [x for x in st.session_state.whitelist if x not in st.session_state.whitelist_titles]
+            for token in unmapped:
+                st.session_state.whitelist_titles[token] = get_channel_title(token)
             st.success(f"{len(ch_ids)}개 채널 반영됨")
     # 저장, 삭제, 불러오기 UI
     st.subheader("리스트 관리")
     wh = st.session_state.whitelist
-    titles = st.session_state.get("whitelist_titles", {})
-    selected = st.multiselect("채널 삭제 선택", wh, default=[],format_func=lambda cid: titles.get(cid, cid)  # 표시: 채널명)
+    titles = st.session_state.whitelist_titles
+    selected = st.multiselect(
+        "채널 삭제 선택", wh, default=[],
+        format_func=lambda cid: titles.get(cid, cid)
+    )
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("선택 삭제") and selected:
-            before = len(wh)
             st.session_state.whitelist = [x for x in wh if x not in set(selected)]
-            st.success(f"{before - len(st.session_state.whitelist)}개 삭제")
+            for cid in selected:
+                st.session_state.whitelist_titles.pop(cid, None)
+            st.success("삭제 완료")
     with col2:
         if st.button("전체 비우기"):
             st.session_state.whitelist = []
+            st.session_state.whitelist_titles = {}
             st.info("전체 삭제 완료!")
     with col3:
         if st.button("저장(GitHub에)"):
@@ -157,20 +161,28 @@ if MODE == "화이트리스트 채널":
             if ok:
                 st.success("저장 완료(GitHub Gist)")
             else:
-                st.error("Gist 저장 실패(TOKEN/ID/네트워크 확인)")
+                st.error("Gist 저장 실패")
     with col4:
         if st.button("저장된 리스트 불러오기"):
             loaded = load_whitelist_from_gist(GIST_ID, GIST_TOKEN, GIST_FILENAME)
             st.session_state.whitelist = loaded
+            unmapped = [x for x in loaded if x not in st.session_state.whitelist_titles]
+            for token in unmapped:
+                st.session_state.whitelist_titles[token] = get_channel_title(token)
             st.success(f"불러옴: {len(loaded)}개")
-
-    st.markdown(f"현재 리스트: {len(st.session_state.whitelist)}개")
+    # 현재 채널명 기반 리스트 표시!
+    if st.session_state.whitelist:
+        st.markdown(
+            "현재 등록된 채널: " +
+            ", ".join([titles.get(x, x) for x in st.session_state.whitelist])
+        )
+    else:
+        st.info("등록된 채널이 없습니다.")
 
 # --- 실행 버튼 (딱 1회만!) ---
 if st.button("최신 숏츠 트렌드 추출"):
     ids = []
     filtered = []
-
     if MODE == "전체 트렌드 (정치/뉴스)":
         vcat = "25"
         page_token = None
@@ -193,7 +205,6 @@ if st.button("최신 숏츠 트렌드 추출"):
             page_token = data.get("nextPageToken")
             if not page_token or len(ids) >= max_results:
                 break
-
     elif MODE == "화이트리스트 채널":
         for ch in st.session_state.whitelist:
             API = "https://www.googleapis.com/youtube/v3/channels"
@@ -213,7 +224,6 @@ if st.button("최신 숏츠 트렌드 추출"):
             })
             vids = [it["contentDetails"]["videoId"] for it in r2.json().get("items",[])]
             ids += vids
-
     elif MODE == "키워드(검색어) 기반":
         if not keyword.strip():
             st.warning("검색어를 입력해주세요.")
@@ -238,7 +248,6 @@ if st.button("최신 숏츠 트렌드 추출"):
             page_token = data.get("nextPageToken")
             if not page_token or len(ids) >= max_results:
                 break
-
     # --- 영상 상세(batch로) ---
     stats = []
     for i in range(0, len(ids), 50):
@@ -262,10 +271,9 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "length_sec": sec,
                 "url": f"https://youtu.be/{item['id']}"
             })
-
-    # --- 필터 (화이트리스트 모드만 시간/길이 제한X, 나머지는 있음) ---
+    # --- 필터 ---
     if MODE == "화이트리스트 채널":
-        filtered = stats  # 길이, 시간 제한 없이 전체 모두!
+        filtered = stats
     else:
         filtered = [
             v for v in stats
@@ -273,7 +281,6 @@ if st.button("최신 숏츠 트렌드 추출"):
             and v["publishedAt"] >= published_after
         ]
     filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)[:20]
-
     df = pd.DataFrame(filtered)
     show_cols = ["title", "viewCount", "channelTitle", "publishedAt", "length_sec", "url"]
     if df.empty:
