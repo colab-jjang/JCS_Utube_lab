@@ -277,21 +277,36 @@ def trending_news_politics(region_code: str, max_pages: int = 1) -> Dict[str, di
         return {}
     quota = get_quota()
     url = f"{API_BASE}/videos"
-    params = {
-    "key": YOUTUBE_API_KEY,
-    "q": "query",
-    "type": "video",
-    "part": "snippet",
-    "maxResults": 50,
-    "order": "date",
-    "publishedAfter": published_after_utc,
-    "videoDuration": "short",
-    "relevanceLanguage": "ko",
+#    params = {
+#    "key": YOUTUBE_API_KEY,
+#    "q": "query",
+#    "type": "video",
+#    "part": "snippet",
+#    "maxResults": 50,
+#    "order": "date",
+#    "publishedAfter": published_after_utc,
+#    "videoDuration": "short",
+#    "relevanceLanguage": "ko",
     #"regionCode": "KR",
     #"videoCategoryId": "25",
-    "safeSearch": "none",
+#    "safeSearch": "none",
+#    }
+
+    # 테스트용 parameters
+    params = {
+    "key": YOUTUBE_API_KEY,
+    "part": "snippet",
+    "type": "video",
+    "order": "date",
+    # "publishedAfter": published_after_utc,   <= 이거도 잠깐 주석!
+    "videoDuration": "any",                   # 길이도 제한 없이!
+    # "videoCategoryId": "25",                # 이미 주석
+    # "regionCode": "KR",                     # 이것도 주석
+    "maxResults": 50,
     }
 
+
+    
     out: Dict[str, dict] = {}
     page = 0
     next_token = None
@@ -966,8 +981,8 @@ if go:
                     sp = it.get("snippet", {}) or {}
                     stt = it.get("statistics", {}) or {}
                     dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                    if dur > 180:
-                        continue
+                    #if dur > 180:
+                       # continue
                     pub = sp.get("publishedAt")
                     if not pub:
                         continue
@@ -1050,8 +1065,8 @@ if go:
                     sp = it.get("snippet", {}) or {}
                     stt = it.get("statistics", {}) or {}
                     dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                    if dur > 180:
-                        continue
+                    #if dur > 180:
+                        #continue
                     ch_id = sp.get("channelId", "")
                     wl = st.session_state.get("whitelist_ids", set())
                     if wl and ch_id not in wl:
