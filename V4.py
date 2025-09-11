@@ -848,7 +848,7 @@ user_stops = COMMON_STOPWORDS
 # 본문: 실행/수집
 # ---------------------------------------------------------
 now_utc = dt.datetime.now(dt.timezone.utc)
-published_after_utc = (now_utc - dt.timedelta(hours=24)).isoformat()
+published_after_utc = (now_utc - dt.timedelta(days=2)).isoformat()
 go = st.button("수집/갱신 실행", type="primary")
 
 # 등록 채널 입력(필요 시)
@@ -926,8 +926,8 @@ if go:
                 sp = it.get("snippet", {}) or {}
                 stt = it.get("statistics", {}) or {}
                 dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                if dur > 240:
-                    continue
+                #if dur > 240:
+                    #continue
                 pub = sp.get("publishedAt")
                 if not pub:
                     continue
