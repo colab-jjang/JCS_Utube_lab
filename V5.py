@@ -79,6 +79,17 @@ def iso8601_to_seconds(iso):
     m = re.match(r'PT((\d+)M)?((\d+)S)?', iso)
     return int(m.group(2) or 0)*60 + int(m.group(4) or 0) if m else 0
 
+# 앱 시작할 때 자동 초기화 (화이트리스트 세션이 비어있으면 바로 Gist에서 불러오기)
+if "whitelist" not in st.session_state or not st.session_state.whitelist:
+    loaded = load_whitelist_from_gist(GIST_ID, GIST_TOKEN, GIST_FILENAME)
+    st.session_state.whitelist = loaded
+    if "whitelist_titles" not in st.session_state:
+        st.session_state.whitelist_titles = {}
+    unmapped = [x for x in loaded if x not in st.session_state.whitelist_titles]
+    for token in unmapped:
+        st.session_state.whitelist_titles[token] = get_channel_title(token)
+
+
 # ---------- UI ---------- 
 st.title("최신 유튜브 뉴스·정치 숏츠 수집기")
 
