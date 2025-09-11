@@ -901,7 +901,7 @@ if go:
                 "order": "date",   # 최신 업로드 순
                 "publishedAfter": published_after_utc,
                 "videoDuration": "short",
-                "videoCategoryId": "25",  # 뉴스·정치
+                #"videoCategoryId": "25",  # 뉴스·정치
                 "regionCode": region_code,
                 "maxResults": 50,
             }
@@ -926,7 +926,7 @@ if go:
                 sp = it.get("snippet", {}) or {}
                 stt = it.get("statistics", {}) or {}
                 dur = iso8601_to_seconds(cd.get("duration", "PT0S"))
-                if dur > 120:
+                if dur > 240:
                     continue
                 pub = sp.get("publishedAt")
                 if not pub:
