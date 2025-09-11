@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import datetime as dt
 import json
+from urllib.parse import unquote
 
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 GIST_ID = st.secrets["GIST_ID"]
@@ -38,32 +39,38 @@ def load_whitelist_from_gist(GIST_ID, GIST_TOKEN, filename="whitelist_channels.j
 def get_channel_title(channel_token):
     token = str(channel_token)
     channel_id = None
-    if token.startswith("UC") and len(token) > 10:  # UC id
+    if token.startswith("UC") and len(token) > 10:
         channel_id = token
-    elif token.startswith("@"): 
+    elif token.startswith("@"):
         url = "https://www.googleapis.com/youtube/v3/channels"
+        handle = unquote(token.lstrip("@"))
         r = requests.get(url, params={
             "key": API_KEY,
-            "forHandle": token.lstrip("@"),
+            "forHandle": handle,
             "part": "snippet"
         }, timeout=10)
         items = r.json().get("items", [])
-        if items: channel_id = items[0]["id"]
+        if items:
+            channel_id = items[0]["id"]
     elif "youtube.com/" in token:
         import re
-        m = re.search(r"/channel/(UC[\w-]+)", token)
-        if m: channel_id = m.group(1)
+        m = re.search(r"/@([^/?]+)", token)
+        from urllib.parse import unquote
+        if m:
+            handle = unquote(m.group(1))
+            url = "https://www.googleapis.com/youtube/v3/channels"
+            r = requests.get(url, params={
+                "key": API_KEY,
+                "forHandle": handle,
+                "part": "snippet"
+            }, timeout=10)
+            items = r.json().get("items", [])
+            if items:
+                channel_id = items[0]["id"]
         else:
-            m = re.search(r"/@([a-zA-Z0-9._-]+)", token)
+            m = re.search(r"/channel/(UC[\w-]+)", token)
             if m:
-                url = "https://www.googleapis.com/youtube/v3/channels"
-                r = requests.get(url, params={
-                    "key": API_KEY,
-                    "forHandle": m.group(1),
-                    "part": "snippet"
-                }, timeout=10)
-                items = r.json().get("items", [])
-                if items: channel_id = items[0]["id"]
+                channel_id = m.group(1)
     if channel_id:
         url = "https://www.googleapis.com/youtube/v3/channels"
         r = requests.get(url, params={
@@ -74,7 +81,7 @@ def get_channel_title(channel_token):
             return items[0]["snippet"]["title"]
         else:
             return "(추출 실패) " + token
-    return channel_token
+    return "(추출 실패) " + token
 
 def iso8601_to_seconds(iso):
     import re
