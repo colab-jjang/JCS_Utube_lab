@@ -39,6 +39,50 @@ def iso8601_to_seconds(iso):
     m = re.match(r'PT((\d+)M)?((\d+)S)?', iso)
     return int(m.group(2) or 0)*60 + int(m.group(4) or 0) if m else 0
 
+def get_channel_title(channel_token):
+    # id, @handle, url 등 여러 케이스 지원
+    # handle/@, url, id 모두 지원
+    channel_id = None
+    token = str(channel_token)
+    if token.startswith("UC") and len(token) > 10:  # UC id
+        channel_id = token
+    elif token.startswith("@"):                       # handle
+        url = f"https://www.googleapis.com/youtube/v3/channels"
+        r = requests.get(url, params={
+            "key": API_KEY,
+            "forHandle": token.lstrip("@"),
+            "part": "snippet"
+        })
+        items = r.json().get("items", [])
+        if items: channel_id = items[0]["id"]
+    elif "youtube.com/" in token:
+        # url에서 id 따내기수
+        import re
+        m = re.search(r"/channel/(UC[\w-]+)", token)
+        if m: channel_id = m.group(1)
+        else:
+            m = re.search(r"/@([a-zA-Z0-9._-]+)", token)
+            if m:
+                url = f"https://www.googleapis.com/youtube/v3/channels"
+                r = requests.get(url, params={
+                    "key": API_KEY,
+                    "forHandle": m.group(1),
+                    "part": "snippet"
+                })
+                items = r.json().get("items", [])
+                if items: channel_id = items[0]["id"]
+    # 이제 최종적으로 id로 channel title조회
+    if channel_id:
+        url = f"https://www.googleapis.com/youtube/v3/channels"
+        r = requests.get(url, params={
+            "key": API_KEY, "id": channel_id, "part": "snippet"
+        })
+        items = r.json().get("items", [])
+        if items:
+            return items[0]["snippet"]["title"]
+    return channel_token
+
+
 # --------- UI 시작 ----------
 st.title("최신 유튜브 뉴스·정치 숏츠 수집기")
 
@@ -67,6 +111,7 @@ if MODE == "키워드(검색어) 기반":
 # --- (화이트리스트 관리: 업로드/수동/저장/삭제/불러오기) ---
 if "whitelist" not in st.session_state:
     st.session_state.whitelist = []
+    
 
 if MODE == "화이트리스트 채널":
     st.subheader("화이트리스트 업로드·편집·저장")
@@ -77,6 +122,11 @@ if MODE == "화이트리스트 채널":
             df = pd.read_csv(upl)
             ch_ids = df.iloc[:, 0].apply(lambda x: str(x).strip()).tolist()
             st.session_state.whitelist = list(sorted(set(ch_ids)))
+            if "whitelist_titles" not in st.session_state:
+                st.session_state["whitelist_titles"] = {}
+            unmapped = [x for x in st.session_state.whitelist if x not in st.session_state["whitelist_titles"]]
+            for token in unmapped:
+                st.session_state["whitelist_titles"][token] = get_channel_title(token)
             st.success(f"{len(ch_ids)}개 채널 반영됨")
     with tab2:
         manual = st.text_area("채널 직접 입력(줄바꿈/쉼표가능)", height=100)
@@ -87,7 +137,8 @@ if MODE == "화이트리스트 채널":
     # 저장, 삭제, 불러오기 UI
     st.subheader("리스트 관리")
     wh = st.session_state.whitelist
-    selected = st.multiselect("채널 삭제 선택", wh, default=[])
+    titles = st.session_state.get("whitelist_titles", {})
+    selected = st.multiselect("채널 삭제 선택", wh, default=[],format_func=lambda cid: titles.get(cid, cid)  # 표시: 채널명)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("선택 삭제") and selected:
