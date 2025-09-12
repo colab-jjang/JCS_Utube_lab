@@ -269,7 +269,7 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "type": "video",
                 "order": "date",
                 "publishedAfter": published_after,
-                "videoDuration": "medium",
+                "videoDuration": "short",
                 "videoCategoryId": vcat,
                 "regionCode": country,
                 "maxResults": 50
@@ -312,7 +312,7 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "type": "video",
                 "order": "date",
                 "publishedAfter": published_after,
-                "videoDuration": "medium",
+                "videoDuration": "short",
                 "q": keyword,
                 "regionCode": country,
                 "maxResults": 50
