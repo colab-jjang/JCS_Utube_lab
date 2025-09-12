@@ -135,6 +135,174 @@ def safe_float_len_sec(v):
     except (TypeError, ValueError, KeyError):
         return None
 
+def best_search_trend():
+    # 튜닝 대상 파라미터 세트
+    region_codes = [None, "KR"]
+    hour_limits = [72, 168]               # 3일, 7일
+    max_len_secs = [60, 90, 180]          # 1분, 1분반, 3분
+    category_ids = [None, "25"]
+    
+    # 결과 기록
+    all_results = []
+
+    for region in region_codes:
+        for hours in hour_limits:
+            published_after = (
+                dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+            ).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+            for max_len in max_len_secs:
+                for cat in category_ids:
+                    ids = []
+                    # === 1차 영상 아이디 수집 ===
+                    params = {
+                        "key": API_KEY,
+                        "part": "snippet",
+                        "type": "video",
+                        "order": "date",
+                        "publishedAfter": published_after,
+                        "videoDuration": "any",
+                        "maxResults": 50
+                    }
+                    if region:
+                        params["regionCode"] = region
+                    if cat:
+                        params["videoCategoryId"] = cat
+                    r = requests.get("https://www.googleapis.com/youtube/v3/search", params=params)
+                    d = r.json()
+                    if "items" not in d or len(d["items"]) == 0:
+                        continue
+                    ids = [it["id"]["videoId"] for it in d.get("items", []) if "id" in it and "videoId" in it["id"]]
+                    # === 2차 상세 수집 (상세 조건 필터) ===
+                    stats = []
+                    for i in range(0, len(ids), 50):
+                        batch = ids[i:i+50]
+                        detail_params = {
+                            "key": API_KEY,
+                            "id": ",".join(batch),
+                            "part": "contentDetails,statistics,snippet"
+                        }
+                        r2 = requests.get("https://www.googleapis.com/youtube/v3/videos", params=detail_params)
+                        vj = r2.json()
+                        for item in vj.get("items", []):
+                            c = item.get("contentDetails", {})
+                            snip = item.get("snippet", {})
+                            s = item.get("statistics", {})
+                            sec = 0
+                            try:
+                                dstr = c.get("duration","")
+                                sec = int(dstr.replace("PT","").replace("M","").replace("S","")) if "M" in dstr else int(dstr.replace("PT","").replace("S",""))
+                            except: pass
+                            stats.append({
+                                "title": snip.get("title",""),
+                                "viewCount": int(s.get("viewCount",0)) if s.get("viewCount") else 0,
+                                "channelTitle": snip.get("channelTitle", ""),
+                                "publishedAt": snip.get("publishedAt", ""),
+                                "length_sec": sec,
+                                "url": f"https://youtu.be/{item['id']}" if 'id' in item else ""
+                            })
+                    # 트렌드 영상 적정량(20개 이상), 길이 조건으로 필터
+                    filtered = [v for v in stats if (isinstance(v.get("length_sec"), int) and v["length_sec"] <= max_len and v["length_sec"] > 0)]
+                    filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)
+                    all_results.append({
+                        "region": region or "전체",
+                        "hours": hours,
+                        "max_len_sec": max_len,
+                        "category": cat or "전체",
+                        "trend_count": len(filtered),
+                        "top5_titles": [v["title"] for v in filtered[:5]],
+                        "trend_data": filtered
+                    })
+    # 가장 데이터가 많으면서 적절한 세트 추천
+    all_results = sorted(all_results, key=lambda x: (-x["trend_count"], x["max_len_sec"]))
+    if not all_results or all_results[0]["trend_count"] == 0:
+        st.warning("어떤 조건에서도 충분한 숏츠가 나오지 않습니다. 범위/조건을 더 넓혀보세요.")
+        return
+    best = all_results[0]
+    st.success(f"최적조건: 시간범위 {best['hours']}시간, regionCode {best['region']}, 카테고리 {best['category']}, 최대길이 {best['max_len_sec']}초")
+    st.info("대표 영상:\n" + "\n".join(f"- {t}" for t in best["top5_titles"]))
+    df = pd.DataFrame(best["trend_data"])
+    show_cols = ["title","viewCount","channelTitle","publishedAt","length_sec","url"]
+    if not df.empty:
+        st.dataframe(df[show_cols], width='stretch')
+        csv = df[show_cols].to_csv(index=False, encoding="utf-8-sig")
+        st.download_button("CSV로 다운로드", csv, file_name="shorts_trend_best.csv", mime="text/csv")
+
+if st.button("최적 트렌드 검색 자동화 실행"):
+    best_search_trend()
+
+def find_best_trend_condition():
+    best_result = None
+    combis = [
+        # (시간, regionCode, 카테고리ID, max_len_sec)
+        (72, None, None, 180),
+        (168, None, None, 180),
+        (72, "KR", "25", 180),
+        (72, "KR", "25", 90),
+        (168, "KR", "25", 90),
+        (72, "KR", None, 90),
+        (168, "KR", None, 90),
+        # 필요시 더 다양한 조합 추가
+    ]
+    all_results = []
+    for hour, reg, cat, max_len in combis:
+        published_after = (
+            dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hour)
+        ).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+        params = {
+            "key": API_KEY,
+            "part": "snippet",
+            "type": "video",
+            "order": "date",
+            "publishedAfter": published_after,
+            "videoDuration": "any",
+            "maxResults": 50,
+        }
+        if reg:
+            params["regionCode"] = reg
+        if cat:
+            params["videoCategoryId"] = cat
+        r = requests.get("https://www.googleapis.com/youtube/v3/search", params=params)
+        data = r.json()
+        ids = [it["id"]["videoId"] for it in data.get("items", []) if "id" in it and "videoId" in it["id"]]
+        stats = []
+        for i in range(0, len(ids), 50):
+            batch = ids[i:i+50]
+            r2 = requests.get("https://www.googleapis.com/youtube/v3/videos", params={
+                "key": API_KEY, "id": ",".join(batch),
+                "part": "contentDetails,statistics,snippet"
+            })
+            video_resp = r2.json()
+            for item in video_resp.get("items", []):
+                s = item.get("statistics", {})
+                c = item.get("contentDetails", {})
+                snip = item.get("snippet", {})
+                sec = iso8601_to_seconds(c.get("duration", "")) if isinstance(c.get("duration", ""), str) else None
+                stats.append({
+                    "title": snip.get("title", ""),
+                    "viewCount": int(s.get("viewCount", 0)) if is_number(s.get("viewCount", 0)) else 0,
+                    "channelTitle": snip.get("channelTitle", ""),
+                    "publishedAt": snip.get("publishedAt", ""),
+                    "length_sec": sec,
+                    "url": f"https://youtu.be/{item['id']}" if 'id' in item else ""
+                })
+        filtered = [v for v in stats if isinstance(v.get("length_sec"), (int,float)) and v["length_sec"] > 0 and v["length_sec"] <= max_len]
+        total = len(filtered)
+        if total > 0:
+            all_results.append((total, filtered, f"{hour}h - reg:{reg} cat:{cat} maxlen:{max_len}"))
+        if best_result is None or (total > 0 and total > best_result[0]):
+            best_result = (total, filtered, f"{hour}h - reg:{reg} cat:{cat} maxlen:{max_len}")
+    if best_result is None:
+        st.warning("아무 조건에서도 결과가 없습니다.")
+        return
+    s, lst, desc = best_result
+    df = pd.DataFrame(lst)
+    st.success(f"추천최적조건({desc}) 결과 {s}건")
+    st.dataframe(df, width='stretch')
+
+if st.button("최적화 트렌드 검색 실행"):
+    find_best_trend_condition()
+
+
 KST = dt.timezone(dt.timedelta(hours=9))
 now_utc = dt.datetime.now(dt.timezone.utc)
 now_kst = now_utc.astimezone(KST)
