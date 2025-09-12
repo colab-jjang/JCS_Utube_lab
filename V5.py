@@ -166,12 +166,10 @@ max_results = 50
 if MODE != "화이트리스트 채널":
     country = st.selectbox("국가(regionCode)", ["KR", "US", "JP", "GB", "DE"], index=0)
     hour_limit = st.selectbox("최신 N시간 이내", [12, 24], index=1)
-    length_sec = st.selectbox("숏츠 최대 길이(초)", [60, 90, 120, 180, 240, 300], index=3)
     published_after = (dt.datetime.utcnow() - dt.timedelta(hours=hour_limit)).isoformat("T") + "Z"
 else:
     published_after = None
     country = None
-    length_sec = None
 
 keyword = ""
 if MODE == "키워드(검색어) 기반":
@@ -353,8 +351,7 @@ if st.button("최신 숏츠 트렌드 추출"):
     else:
         filtered = [
             v for v in stats
-            if v["length_sec"] <= length_sec
-            and v["publishedAt"] >= published_after
+            if v["publishedAt"] >= published_after
         ]
     filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)[:20]
     df = pd.DataFrame(filtered)
