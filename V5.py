@@ -62,7 +62,7 @@ progress = min(used_quota / API_MAX_QUOTA, 1.0)
 
 st.markdown(f"### YouTube API 일일 사용량: {used_quota}/{API_MAX_QUOTA}")
 st.progress(progress)
-st.markdown(f"**다음 리셋(한국 오전 9시):** {reset_time_kst.strftime('%Y-%m-%d %H:%M:%S')}, 남은 시간: {str(remain).split('.')[0]}")
+st.markdown(f"**다음 리셋(한국 오후 4시):** {reset_time_kst.strftime('%Y-%m-%d %H:%M:%S')}, 남은 시간: {str(remain).split('.')[0]}")
 st.markdown(f"(지금: {now_kst.strftime('%Y-%m-%d %H:%M:%S KST')})")
 
 # ---- Gist 연동 ----
