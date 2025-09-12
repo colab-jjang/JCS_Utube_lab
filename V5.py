@@ -181,7 +181,7 @@ max_results = 50
 if MODE != "화이트리스트 채널":
     country = st.selectbox("국가(regionCode)", ["KR", "US", "JP", "GB", "DE"], index=0)
     hour_limit = st.selectbox("최신 N시간 이내", [12, 24], index=1)
-    published_after = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hour_limit)).replace(microsecond=0).isoformat("T") + "Z"
+    published_after = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hour_limit)).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
     max_len_sec = 180
 else:
     published_after = None
