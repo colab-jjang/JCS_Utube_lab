@@ -361,26 +361,24 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "length_sec": sec,
                 "url": f"https://youtu.be/{item['id']}"
             })
+            
     # ✨ 안전하게 is_number 체크 + float 변환 + publishedAt get
     if MODE == "화이트리스트 채널":
-        filtered = [
-            v for v in stats
-            for _sec in [safe_float_len_sec(v)]
-            if _sec is not None
-            and _sec <= max_len_sec
-            and v.get("publishedAt") is not None
-            and v["publishedAt"] >= published_after
-        ]
-
+        filtered = []
+        for v in stats:
+            sec = safe_float_len_sec(v)
+            if sec is not None and max_len_sec is not None \
+               and v.get("publishedAt") is not None and v["publishedAt"] >= published_after \
+               and sec <= max_len_sec:
+                filtered.append(v)
     else:
-        filtered = [
-            v for v in stats
-            for _sec in [safe_float_len_sec(v)]
-            if _sec is not None
-            and _sec <= max_len_sec
-            and v.get("publishedAt") is not None
-            and v["publishedAt"] >= published_after
-        ]
+        filtered = []
+        for v in stats:
+            sec = safe_float_len_sec(v)
+            if sec is not None and max_len_sec is not None \
+               and v.get("publishedAt") is not None and v["publishedAt"] >= published_after \
+               and sec <= max_len_sec:
+                filtered.append(v)
 
     st.write("수집된 ids:", ids)
     st.write("수집된 stats:", stats)
