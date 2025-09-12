@@ -350,15 +350,19 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "url": f"https://youtu.be/{item['id']}"
             })
     if MODE == "화이트리스트 채널":
-        filtered = [
-            v for v in stats
-            if v["length_sec"] and v["length_sec"] <= max_len_sec
-            and v["publishedAt"] >= published_after   # 날짜조건 추가!
+    filtered = [
+        v for v in stats
+        if v.get("length_sec") is not None
+        and isinstance(v["length_sec"], (int, float))
+        and v["length_sec"] <= max_len_sec
+        and v["publishedAt"] >= published_after
         ]
     else:
         filtered = [
             v for v in stats
-            if v["length_sec"] <= max_len_sec
+            if v.get("length_sec") is not None
+            and isinstance(v["length_sec"], (int, float))
+            and v["length_sec"] <= max_len_sec
             and v["publishedAt"] >= published_after
         ]
 
