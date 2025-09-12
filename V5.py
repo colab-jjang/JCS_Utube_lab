@@ -44,7 +44,7 @@ def set_quota_usage(GIST_ID, GIST_TOKEN, count, filename="quota.json"):
 KST = dt.timezone(dt.timedelta(hours=9))
 now_utc = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
 now_kst = now_utc.astimezone(KST)
-reset_today_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+reset_today_kst = now_kst.replace(hour=16, minute=0, second=0, microsecond=0)
 if now_kst >= reset_today_kst:
     reset_time_kst = reset_today_kst + dt.timedelta(days=1)
 else:
