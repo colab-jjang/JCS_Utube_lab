@@ -13,7 +13,6 @@ GIST_FILENAME = "whitelist_channels.json"
 GIST_QUOTA = "quota.json"
 API_MAX_QUOTA = 10000
 
-# ---- quota 관리 ----
 def get_quota_usage(GIST_ID, GIST_TOKEN, filename="quota.json"):
     url = f"https://api.github.com/gists/{GIST_ID}"
     headers = {"Authorization": f"token {GIST_TOKEN}"}
@@ -28,7 +27,6 @@ def get_quota_usage(GIST_ID, GIST_TOKEN, filename="quota.json"):
     return data
 
 def set_quota_usage(GIST_ID, GIST_TOKEN, count, filename="quota.json"):
-    # KST 타임존의 now를 datetime.now()로 변환하는 것이 미래 호환성이 높음
     now_kst = dt.datetime.now(dt.timezone.utc).astimezone(dt.timezone(dt.timedelta(hours=9)))
     data = {"date": now_kst.strftime("%Y-%m-%d"), "count": count}
     url = f"https://api.github.com/gists/{GIST_ID}"
@@ -137,7 +135,6 @@ def safe_float_len_sec(v):
     except (TypeError, ValueError, KeyError):
         return None
 
-# ---- KST(now), 리셋 시각, 진행bar ----
 KST = dt.timezone(dt.timedelta(hours=9))
 now_utc = dt.datetime.now(dt.timezone.utc)
 now_kst = now_utc.astimezone(KST)
@@ -160,7 +157,6 @@ st.progress(progress)
 st.markdown(f"**다음 리셋(한국 오후 4시):** {reset_time_kst.strftime('%Y-%m-%d %H:%M:%S')}, 남은 시간: {str(remain).split('.')[0]}")
 st.markdown(f"(지금: {now_kst.strftime('%Y-%m-%d %H:%M:%S KST')})")
 
-# ---- 세션 상태 초기화 ----
 if "whitelist" not in st.session_state or not st.session_state.whitelist:
     loaded = load_whitelist_from_gist(GIST_ID, GIST_TOKEN, GIST_FILENAME)
     st.session_state.whitelist = loaded
@@ -177,7 +173,6 @@ if "whitelist" not in st.session_state:
 if "whitelist_titles" not in st.session_state:
     st.session_state.whitelist_titles = {}
 
-# ---- UI ----
 st.title("최신 유튜브 뉴스·정치 숏츠 수집기")
 MODE = st.radio("수집 모드 선택", [
     "전체 트렌드 (정치/뉴스)", "화이트리스트 채널", "키워드(검색어) 기반"
@@ -264,7 +259,7 @@ if MODE == "화이트리스트 채널":
                 "채널 ID": cid
             })
         df = pd.DataFrame(df_list)
-        st.dataframe(df, width='stretch')  # Streamlit 2025 이후 권장 파라미터
+        st.dataframe(df, width='stretch')
     else:
         st.info("등록된 채널이 없습니다.")
 
@@ -289,8 +284,8 @@ if st.button("최신 숏츠 트렌드 추출"):
             if page_token: params["pageToken"] = page_token
             r = quota_requests_get("https://www.googleapis.com/youtube/v3/search", params=params)
             data = r.json()
-            print(data)
-            ids += [it["id"]["videoId"] for it in data.get("items", [])]
+            st.write("YouTube Search API 응답:", data)
+            ids += [it["id"]["videoId"] for it in data.get("items", []) if "id" in it and "videoId" in it["id"]]
             page_token = data.get("nextPageToken")
             if not page_token or len(ids) >= max_results:
                 break
@@ -305,7 +300,9 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "id": uc_id,
                 "part": "contentDetails"
             })
-            items = r.json().get("items", [])
+            cj = r.json()
+            st.write("채널 contentDetails 응답:", cj)
+            items = cj.get("items", [])
             if not items:
                 continue
             pid = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
@@ -314,8 +311,9 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "key": API_KEY, "playlistId": pid,
                 "part": "snippet,contentDetails", "maxResults": 10
             })
-            vids = [it["contentDetails"]["videoId"] for it in r2.json().get("items",[])]
-            print(r2.json())
+            r2j = r2.json()
+            st.write("채널 playlistItems 응답:", r2j)
+            vids = [it["contentDetails"]["videoId"] for it in r2j.get("items", []) if "contentDetails" in it and "videoId" in it["contentDetails"]]
             ids += vids
     elif MODE == "키워드(검색어) 기반":
         if not keyword.strip():
@@ -336,9 +334,9 @@ if st.button("최신 숏츠 트렌드 추출"):
             }
             if page_token: params["pageToken"] = page_token
             r = quota_requests_get("https://www.googleapis.com/youtube/v3/search", params=params)
-            print(r.json())
             data = r.json()
-            ids += [it["id"]["videoId"] for it in data.get("items", [])]
+            st.write("키워드 Search API 응답:", data)
+            ids += [it["id"]["videoId"] for it in data.get("items", []) if "id" in it and "videoId" in it["id"]]
             page_token = data.get("nextPageToken")
             if not page_token or len(ids) >= max_results:
                 break
@@ -351,42 +349,35 @@ if st.button("최신 숏츠 트렌드 추출"):
             "part": "contentDetails,statistics,snippet"
         }
         r = quota_requests_get("https://www.googleapis.com/youtube/v3/videos", params=params)
-        for item in r.json().get("items", []):
+        video_resp = r.json()
+        st.write("YouTube Videos API 응답:", video_resp)
+        for item in video_resp.get("items", []):
             s = item.get("statistics", {})
             c = item.get("contentDetails", {})
             snip = item.get("snippet", {})
-            sec = iso8601_to_seconds(c.get("duration", ""))
+            sec = iso8601_to_seconds(c.get("duration", "")) if isinstance(c.get("duration", ""), str) else None
             stats.append({
                 "title": snip.get("title", ""),
-                "viewCount": int(s.get("viewCount", 0)),
+                "viewCount": int(s.get("viewCount", 0)) if is_number(s.get("viewCount", 0)) else 0,
                 "channelTitle": snip.get("channelTitle", ""),
                 "publishedAt": snip.get("publishedAt", ""),
                 "length_sec": sec,
-                "url": f"https://youtu.be/{item['id']}"
+                "url": f"https://youtu.be/{item['id']}" if 'id' in item else ""
             })
-
-    st.write("화이트리스트 stats 샘플:", stats[:5])   # 5개만 보기
+    st.write("화이트리스트 stats 샘플:", stats[:5])
     st.write("화이트리스트 전체 video publishedAt:", [v.get("publishedAt") for v in stats])
     st.write("전체 length_sec:", [safe_float_len_sec(v) for v in stats])
 
-            
-    # ✨ 안전하게 is_number 체크 + float 변환 + publishedAt get
-    if MODE == "화이트리스트 채널":
-        filtered = []
-        for v in stats:
-            sec = safe_float_len_sec(v)
-            if sec is not None and max_len_sec is not None \
-               and v.get("publishedAt") is not None and v["publishedAt"] >= published_after \
-               and sec <= max_len_sec:
-                filtered.append(v)
-    else:
-        filtered = []
-        for v in stats:
-            sec = safe_float_len_sec(v)
-            if sec is not None and max_len_sec is not None \
-               and v.get("publishedAt") is not None and v["publishedAt"] >= published_after \
-               and sec <= max_len_sec:
-                filtered.append(v)
+    filtered = []
+    for v in stats:
+        sec = v.get("length_sec")
+        pub = v.get("publishedAt")
+        if (
+            isinstance(sec, (int, float)) and sec is not None and max_len_sec is not None
+            and pub is not None and isinstance(pub, str) and (published_after is None or pub >= published_after)
+            and sec <= max_len_sec
+        ):
+            filtered.append(v)
 
     st.write("수집된 ids:", ids)
     st.write("수집된 stats:", stats)
@@ -396,7 +387,7 @@ if st.button("최신 숏츠 트렌드 추출"):
     if df.empty:
         st.info("조건에 맞는 최신 숏츠가 없습니다.")
     else:
-        st.dataframe(df[show_cols], width='stretch')  # Streamlit 권장사항 반영
+        st.dataframe(df[show_cols], width='stretch')
         csv = df[show_cols].to_csv(index=False, encoding="utf-8-sig")
         st.download_button("CSV로 다운로드", csv, file_name="shorts_trend.csv", mime="text/csv")
         st.success(f"{len(df)}개 TOP 숏츠 (조회수 순)")
