@@ -167,6 +167,7 @@ if MODE != "화이트리스트 채널":
     country = st.selectbox("국가(regionCode)", ["KR", "US", "JP", "GB", "DE"], index=0)
     hour_limit = st.selectbox("최신 N시간 이내", [12, 24], index=1)
     published_after = (dt.datetime.utcnow() - dt.timedelta(hours=hour_limit)).isoformat("T") + "Z"
+    max_len_sec = 180    #영상 길이 (초)
 else:
     published_after = None
     country = None
@@ -269,7 +270,7 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "type": "video",
                 "order": "date",
                 "publishedAfter": published_after,
-                "videoDuration": "short",
+                "videoDuration": "any",
                 "videoCategoryId": vcat,
                 "regionCode": country,
                 "maxResults": 50
@@ -312,7 +313,7 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "type": "video",
                 "order": "date",
                 "publishedAfter": published_after,
-                "videoDuration": "short",
+                "videoDuration": "any",
                 "q": keyword,
                 "regionCode": country,
                 "maxResults": 50
@@ -351,7 +352,8 @@ if st.button("최신 숏츠 트렌드 추출"):
     else:
         filtered = [
             v for v in stats
-            if v["publishedAt"] >= published_after
+            if v["length_sec"] <= max_len_sec
+            and v["publishedAt"] >= published_after
         ]
     filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)[:20]
     df = pd.DataFrame(filtered)
