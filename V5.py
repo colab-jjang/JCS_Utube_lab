@@ -122,6 +122,12 @@ def load_whitelist_from_gist(GIST_ID, GIST_TOKEN, filename=GIST_FILENAME):
     data = json.loads(content)
     return data if isinstance(data, list) else []
 
+def is_number(val):
+    try:
+        return val is not None and str(val).strip() != "" and float(val) == float(val)
+    except (TypeError, ValueError):
+        return False
+
 # ---- KST(now), 리셋 시각, 진행bar ----
 KST = dt.timezone(dt.timedelta(hours=9))
 now_utc = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
@@ -352,19 +358,18 @@ if st.button("최신 숏츠 트렌드 추출"):
     if MODE == "화이트리스트 채널":
         filtered = [
             v for v in stats
-            if v.get("length_sec") is not None
-            and isinstance(v["length_sec"], (int, float))
-            and v["length_sec"] <= max_len_sec
+            if is_number(v.get("length_sec"))
+            and float(v["length_sec"]) <= max_len_sec
             and v["publishedAt"] >= published_after
-            ]
+        ]
     else:
         filtered = [
             v for v in stats
-            if v.get("length_sec") is not None
-            and isinstance(v["length_sec"], (int, float))
-            and v["length_sec"] <= max_len_sec
+            if is_number(v.get("length_sec"))
+            and float(v["length_sec"]) <= max_len_sec
             and v["publishedAt"] >= published_after
         ]
+
 
     st.write("수집된 ids:", ids)
     st.write("수집된 stats:", stats)
