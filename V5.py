@@ -289,6 +289,7 @@ if st.button("최신 숏츠 트렌드 추출"):
             if page_token: params["pageToken"] = page_token
             r = quota_requests_get("https://www.googleapis.com/youtube/v3/search", params=params)
             data = r.json()
+            print(data)
             ids += [it["id"]["videoId"] for it in data.get("items", [])]
             page_token = data.get("nextPageToken")
             if not page_token or len(ids) >= max_results:
@@ -314,6 +315,7 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "part": "snippet,contentDetails", "maxResults": 10
             })
             vids = [it["contentDetails"]["videoId"] for it in r2.json().get("items",[])]
+            print(r2.json())
             ids += vids
     elif MODE == "키워드(검색어) 기반":
         if not keyword.strip():
@@ -334,6 +336,7 @@ if st.button("최신 숏츠 트렌드 추출"):
             }
             if page_token: params["pageToken"] = page_token
             r = quota_requests_get("https://www.googleapis.com/youtube/v3/search", params=params)
+            print(r.json())
             data = r.json()
             ids += [it["id"]["videoId"] for it in data.get("items", [])]
             page_token = data.get("nextPageToken")
