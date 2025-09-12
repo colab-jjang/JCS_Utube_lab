@@ -365,16 +365,19 @@ if st.button("최신 숏츠 트렌드 추출"):
     if MODE == "화이트리스트 채널":
         filtered = [
             v for v in stats
-            if safe_float_len_sec(v) is not None
-            and safe_float_len_sec(v) <= max_len_sec
+            for _sec in [safe_float_len_sec(v)]
+            if _sec is not None
+            and _sec <= max_len_sec
             and v.get("publishedAt") is not None
             and v["publishedAt"] >= published_after
         ]
+
     else:
         filtered = [
             v for v in stats
-            if safe_float_len_sec(v) is not None
-            and safe_float_len_sec(v) <= max_len_sec
+            for _sec in [safe_float_len_sec(v)]
+            if _sec is not None
+            and _sec <= max_len_sec
             and v.get("publishedAt") is not None
             and v["publishedAt"] >= published_after
         ]
