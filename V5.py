@@ -28,7 +28,8 @@ def get_quota_usage(GIST_ID, GIST_TOKEN, filename="quota.json"):
     return data
 
 def set_quota_usage(GIST_ID, GIST_TOKEN, count, filename="quota.json"):
-    now_kst = dt.datetime.utcnow() + dt.timedelta(hours=9)
+    # KST 타임존의 now를 datetime.now()로 변환하는 것이 미래 호환성이 높음
+    now_kst = dt.datetime.now(dt.timezone.utc).astimezone(dt.timezone(dt.timedelta(hours=9)))
     data = {"date": now_kst.strftime("%Y-%m-%d"), "count": count}
     url = f"https://api.github.com/gists/{GIST_ID}"
     headers = {"Authorization": f"token {GIST_TOKEN}"}
@@ -36,7 +37,6 @@ def set_quota_usage(GIST_ID, GIST_TOKEN, count, filename="quota.json"):
     r = requests.patch(url, json=payload, headers=headers, timeout=10)
     return r.status_code == 200
 
-# ---- 채널ID 변환 함수 ----
 def get_channel_id_from_token(token):
     token = str(token).strip()
     if token.startswith("UC"):
@@ -124,13 +124,16 @@ def load_whitelist_from_gist(GIST_ID, GIST_TOKEN, filename=GIST_FILENAME):
 
 def is_number(val):
     try:
-        return val is not None and str(val).strip() != "" and float(val) == float(val)
+        if val is None:
+            return False
+        float(val)
+        return True
     except (TypeError, ValueError):
         return False
 
 # ---- KST(now), 리셋 시각, 진행bar ----
 KST = dt.timezone(dt.timedelta(hours=9))
-now_utc = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+now_utc = dt.datetime.now(dt.timezone.utc)
 now_kst = now_utc.astimezone(KST)
 reset_today_kst = now_kst.replace(hour=16, minute=0, second=0, microsecond=0)
 if now_kst >= reset_today_kst:
@@ -174,21 +177,18 @@ MODE = st.radio("수집 모드 선택", [
     "전체 트렌드 (정치/뉴스)", "화이트리스트 채널", "키워드(검색어) 기반"
 ], horizontal=True)
 max_results = 50
-
 if MODE != "화이트리스트 채널":
     country = st.selectbox("국가(regionCode)", ["KR", "US", "JP", "GB", "DE"], index=0)
     hour_limit = st.selectbox("최신 N시간 이내", [12, 24], index=1)
-    published_after = (dt.datetime.utcnow() - dt.timedelta(hours=hour_limit)).isoformat("T") + "Z"
+    published_after = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hour_limit)).isoformat("T") + "Z"
     max_len_sec = 180
 else:
     published_after = None
     country = None
     max_len_sec = None
-
 keyword = ""
 if MODE == "키워드(검색어) 기반":
     keyword = st.text_input("검색어(뉴스/정치 관련 단어 입력)", value="")
-
 if MODE == "화이트리스트 채널":
     st.subheader("화이트리스트 업로드·편집·저장")
     tab1, tab2 = st.tabs(["CSV 업로드", "수동 입력"])
@@ -258,7 +258,7 @@ if MODE == "화이트리스트 채널":
                 "채널 ID": cid
             })
         df = pd.DataFrame(df_list)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')  # Streamlit 2025 이후 권장 파라미터
     else:
         st.info("등록된 채널이 없습니다.")
 
@@ -355,11 +355,13 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "length_sec": sec,
                 "url": f"https://youtu.be/{item['id']}"
             })
+    # ✨ 안전하게 is_number 체크 + float 변환 + publishedAt get
     if MODE == "화이트리스트 채널":
         filtered = [
             v for v in stats
             if is_number(v.get("length_sec"))
             and float(v["length_sec"]) <= max_len_sec
+            and v.get("publishedAt") is not None
             and v["publishedAt"] >= published_after
         ]
     else:
@@ -367,10 +369,9 @@ if st.button("최신 숏츠 트렌드 추출"):
             v for v in stats
             if is_number(v.get("length_sec"))
             and float(v["length_sec"]) <= max_len_sec
+            and v.get("publishedAt") is not None
             and v["publishedAt"] >= published_after
         ]
-
-
     st.write("수집된 ids:", ids)
     st.write("수집된 stats:", stats)
     filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)[:20]
@@ -379,7 +380,7 @@ if st.button("최신 숏츠 트렌드 추출"):
     if df.empty:
         st.info("조건에 맞는 최신 숏츠가 없습니다.")
     else:
-        st.dataframe(df[show_cols], use_container_width=True)
+        st.dataframe(df[show_cols], width='stretch')  # Streamlit 권장사항 반영
         csv = df[show_cols].to_csv(index=False, encoding="utf-8-sig")
         st.download_button("CSV로 다운로드", csv, file_name="shorts_trend.csv", mime="text/csv")
         st.success(f"{len(df)}개 TOP 숏츠 (조회수 순)")
