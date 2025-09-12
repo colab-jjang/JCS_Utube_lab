@@ -361,6 +361,11 @@ if st.button("최신 숏츠 트렌드 추출"):
                 "length_sec": sec,
                 "url": f"https://youtu.be/{item['id']}"
             })
+
+    st.write("화이트리스트 stats 샘플:", stats[:5])   # 5개만 보기
+    st.write("화이트리스트 전체 video publishedAt:", [v.get("publishedAt") for v in stats])
+    st.write("전체 length_sec:", [safe_float_len_sec(v) for v in stats])
+
             
     # ✨ 안전하게 is_number 체크 + float 변환 + publishedAt get
     if MODE == "화이트리스트 채널":
