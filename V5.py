@@ -131,6 +131,12 @@ def is_number(val):
     except (TypeError, ValueError):
         return False
 
+def safe_float_len_sec(v):
+    try:
+        return float(v["length_sec"])
+    except (TypeError, ValueError, KeyError):
+        return None
+
 # ---- KST(now), 리셋 시각, 진행bar ----
 KST = dt.timezone(dt.timedelta(hours=9))
 now_utc = dt.datetime.now(dt.timezone.utc)
@@ -359,19 +365,20 @@ if st.button("최신 숏츠 트렌드 추출"):
     if MODE == "화이트리스트 채널":
         filtered = [
             v for v in stats
-            if is_number(v.get("length_sec"))
-            and float(v["length_sec"]) <= max_len_sec
+            if safe_float_len_sec(v) is not None
+            and safe_float_len_sec(v) <= max_len_sec
             and v.get("publishedAt") is not None
             and v["publishedAt"] >= published_after
         ]
     else:
         filtered = [
             v for v in stats
-            if is_number(v.get("length_sec"))
-            and float(v["length_sec"]) <= max_len_sec
+            if safe_float_len_sec(v) is not None
+            and safe_float_len_sec(v) <= max_len_sec
             and v.get("publishedAt") is not None
             and v["publishedAt"] >= published_after
         ]
+
     st.write("수집된 ids:", ids)
     st.write("수집된 stats:", stats)
     filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)[:20]
