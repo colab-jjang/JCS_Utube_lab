@@ -11,7 +11,7 @@ GIST_ID = st.secrets["GIST_ID"]
 GIST_TOKEN = st.secrets["GIST_TOKEN"]
 GIST_FILENAME = "whitelist_channels.json"
 GIST_QUOTA = "quota.json"
-API_MAX_QUOTA = 10000  # <-- 반드시 네 실제 일일 할당량으로 변경
+API_MAX_QUOTA = 10000  # <-- 반드시 실제 일일 할당량으로 변경
 
 # ---- quota 관리 ----
 def get_quota_usage(GIST_ID, GIST_TOKEN, filename="quota.json"):
