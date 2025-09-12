@@ -100,39 +100,42 @@ def quota_requests_get(*args, **kwargs):
 
 # ---- 채널명 추출 함수 ----
 def get_channel_title(channel_token):
-    token = str(channel_token)
-    channel_id = None
-    if token.startswith("UC") and len(token) > 10:
-        channel_id = token
-    elif token.startswith("@"):
-        handle = unquote(token.lstrip("@"))
-        r = quota_requests_get("https://www.googleapis.com/youtube/v3/channels", params={
-            "key": API_KEY, "forHandle": handle, "part": "snippet"
-        }, timeout=10)
-        items = r.json().get("items", [])
-        if items: channel_id = items[0]["id"]
-    elif "youtube.com/" in token:
-        m = re.search(r"/@([^/?]+)", token)
-        if m:
-            handle = unquote(m.group(1))
+    try: 
+        token = str(channel_token)
+        channel_id = None
+        if token.startswith("UC") and len(token) > 10:
+            channel_id = token
+        elif token.startswith("@"):
+            handle = unquote(token.lstrip("@"))
             r = quota_requests_get("https://www.googleapis.com/youtube/v3/channels", params={
                 "key": API_KEY, "forHandle": handle, "part": "snippet"
             }, timeout=10)
             items = r.json().get("items", [])
             if items: channel_id = items[0]["id"]
-        else:
-            m = re.search(r"/channel/(UC[\w-]+)", token)
-            if m: channel_id = m.group(1)
-    if channel_id:
-        r = quota_requests_get("https://www.googleapis.com/youtube/v3/channels", params={
-            "key": API_KEY, "id": channel_id, "part": "snippet"
-        }, timeout=10)
-        items = r.json().get("items", [])
-        if items:
-            return items[0]["snippet"]["title"]
-        else:
-            return "(추출 실패) " + token
-    return "(추출 실패) " + token
+        elif "youtube.com/" in token:
+            m = re.search(r"/@([^/?]+)", token)
+            if m:
+                handle = unquote(m.group(1))
+                r = quota_requests_get("https://www.googleapis.com/youtube/v3/channels", params={
+                    "key": API_KEY, "forHandle": handle, "part": "snippet"
+                }, timeout=10)
+                items = r.json().get("items", [])
+                if items: channel_id = items[0]["id"]
+            else:
+                m = re.search(r"/channel/(UC[\w-]+)", token)
+                if m: channel_id = m.group(1)
+        if channel_id:
+            r = quota_requests_get("https://www.googleapis.com/youtube/v3/channels", params={
+                "key": API_KEY, "id": channel_id, "part": "snippet"
+            }, timeout=10)
+            items = r.json().get("items", [])
+            if items:
+                return items[0]["snippet"]["title"]
+            else:
+                return "(추출 실패) " + token
+        return "(추출 실패) " + token
+    except Exception as e:
+        return f"(추출 실패) {channel_token}"
 
 def iso8601_to_seconds(iso):
     m = re.match(r'PT((\d+)M)?((\d+)S)?', iso)
@@ -146,7 +149,11 @@ if "whitelist" not in st.session_state or not st.session_state.whitelist:
         st.session_state.whitelist_titles = {}
     unmapped = [x for x in loaded if x not in st.session_state.whitelist_titles]
     for token in unmapped:
-        st.session_state.whitelist_titles[token] = get_channel_title(token)
+        try: 
+            st.session_state.whitelist_titles[token] = get_channel_title(token)
+        except Exception:
+            st.session_state.whitelist_titles[token] = "(API실패)" + str(token)
+        
 if "whitelist" not in st.session_state:
     st.session_state.whitelist = []
 if "whitelist_titles" not in st.session_state:
