@@ -355,6 +355,11 @@ if st.button("최신 숏츠 트렌드 추출"):
             if v["length_sec"] <= max_len_sec
             and v["publishedAt"] >= published_after
         ]
+
+    #임시로 볼 부분, 확인되면 지워도 됨
+    st.write("수집된 ids:", ids)
+    st.write("수집된 stats:", stats)
+    
     filtered = sorted(filtered, key=lambda x: x["viewCount"], reverse=True)[:20]
     df = pd.DataFrame(filtered)
     show_cols = ["title", "viewCount", "channelTitle", "publishedAt", "length_sec", "url"]
