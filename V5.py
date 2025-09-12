@@ -3,41 +3,18 @@ import pandas as pd
 import requests
 import datetime as dt
 import json
+import re
 from urllib.parse import unquote
 
+# --- secrets 및 quota 한도 ---
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 GIST_ID = st.secrets["GIST_ID"]
 GIST_TOKEN = st.secrets["GIST_TOKEN"]
 GIST_FILENAME = "whitelist_channels.json"
 GIST_QUOTA = "quota.json"
-API_MAX_QUOTA = 10000  # 실제 할당량에 맞게 수정!
+API_MAX_QUOTA = 10000  # 반드시 구글 콘솔에 맞게 조정!
 
-# ----------- Gist 연동 함수 -----------
-def save_whitelist_to_gist(whitelist, GIST_ID, GIST_TOKEN, filename="whitelist_channels.json"):
-    url = f"https://api.github.com/gists/{GIST_ID}"
-    headers = {"Authorization": f"token {GIST_TOKEN}"}
-    payload = {
-        "files": {
-            filename: {"content": json.dumps(sorted(list(whitelist)), ensure_ascii=False, indent=2)}
-        }
-    }
-    r = requests.patch(url, json=payload, headers=headers, timeout=20)
-    return r.status_code == 200
-
-def load_whitelist_from_gist(GIST_ID, GIST_TOKEN, filename="whitelist_channels.json"):
-    url = f"https://api.github.com/gists/{GIST_ID}"
-    headers = {"Authorization": f"token {GIST_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=20)
-    if r.status_code != 200:
-        return []
-    files = r.json().get("files", {})
-    if filename not in files:
-        return []
-    content = files[filename]['content']
-    data = json.loads(content)
-    return data if isinstance(data, list) else []
-
-# ----------- API Quota 관리 함수 ----------
+# --- quota API 함수 ---
 def get_quota_usage(GIST_ID, GIST_TOKEN, filename="quota.json"):
     url = f"https://api.github.com/gists/{GIST_ID}"
     headers = {"Authorization": f"token {GIST_TOKEN}"}
@@ -62,68 +39,101 @@ def set_quota_usage(GIST_ID, GIST_TOKEN, count, filename="quota.json"):
     r = requests.patch(url, json=payload, headers=headers, timeout=10)
     return r.status_code == 200
 
-# ---------- API Quota UI 표시 및 누적 관리 ----------
+# --- (한국시간 9시 기준) quota UI 표시 ---
+KST = dt.timezone(dt.timedelta(hours=9))
+now_utc = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+now_kst = now_utc.astimezone(KST)
+reset_today_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+if now_kst >= reset_today_kst:
+    reset_time_kst = reset_today_kst + dt.timedelta(days=1)
+else:
+    reset_time_kst = reset_today_kst
+remain = reset_time_kst - now_kst
+
 quota_info = get_quota_usage(GIST_ID, GIST_TOKEN, GIST_QUOTA)
-today = dt.datetime.utcnow().strftime("%Y-%m-%d")
-if quota_info["date"] != today:
+today_kst = now_kst.strftime("%Y-%m-%d")
+if quota_info["date"] != today_kst:
     set_quota_usage(GIST_ID, GIST_TOKEN, 0, GIST_QUOTA)
     used_quota = 0
 else:
     used_quota = quota_info.get("count", 0)
-
 progress = min(used_quota / API_MAX_QUOTA, 1.0)
-now = dt.datetime.utcnow()
-reset_time = (now + dt.timedelta(days=1)).replace(hour=0,minute=0,second=0,microsecond=0)
-remain = reset_time - now
 
 st.markdown(f"### YouTube API 일일 사용량: {used_quota}/{API_MAX_QUOTA}")
 st.progress(progress)
-st.markdown(f"**UTC 0시까지 남은 시간:** {str(remain).split('.')[0]}")
+st.markdown(f"**다음 리셋(한국 기준 오전 9시):** {reset_time_kst.strftime('%Y-%m-%d %H:%M:%S')} (남은 시간: {str(remain).split('.')[0]})")
 
-# ----------- 채널명 추출 함수 -----------
-def get_channel_title(channel_token):
+# --- Gist 연동(whitelist 등) ---
+def save_whitelist_to_gist(whitelist, GIST_ID, GIST_TOKEN, filename=GIST_FILENAME):
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    headers = {"Authorization": f"token {GIST_TOKEN}"}
+    payload = {
+        "files": {
+            filename: {"content": json.dumps(sorted(list(whitelist)), ensure_ascii=False, indent=2)}
+        }
+    }
+    r = requests.patch(url, json=payload, headers=headers, timeout=20)
+    return r.status_code == 200
+
+def load_whitelist_from_gist(GIST_ID, GIST_TOKEN, filename=GIST_FILENAME):
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    headers = {"Authorization": f"token {GIST_TOKEN}"}
+    r = requests.get(url, headers=headers, timeout=20)
+    if r.status_code != 200:
+        return []
+    files = r.json().get("files", {})
+    if filename not in files:
+        return []
+    content = files[filename]['content']
+    data = json.loads(content)
+    return data if isinstance(data, list) else []
+
+# --- 채널명 추출, 모든 YouTube API 호출 때 quota 증가 ---
+def api_call_with_quota(request_func):
     global used_quota
+    result = request_func()
+    used_quota += 1
+    set_quota_usage(GIST_ID, GIST_TOKEN, used_quota, GIST_QUOTA)
+    return result
+
+def get_channel_title(channel_token):
     token = str(channel_token)
     channel_id = None
     if token.startswith("UC") and len(token) > 10:
         channel_id = token
     elif token.startswith("@"):
         handle = unquote(token.lstrip("@"))
-        url = "https://www.googleapis.com/youtube/v3/channels"
-        r = requests.get(url, params={
-            "key": API_KEY,
-            "forHandle": handle,
-            "part": "snippet"
-        }, timeout=10)
-        used_quota += 1; set_quota_usage(GIST_ID, GIST_TOKEN, used_quota, GIST_QUOTA)
-        items = r.json().get("items", [])
-        if items:
-            channel_id = items[0]["id"]
-    elif "youtube.com/" in token:
-        import re
-        m = re.search(r"/@([^/?]+)", token)
-        if m:
-            handle = unquote(m.group(1))
-            url = "https://www.googleapis.com/youtube/v3/channels"
-            r = requests.get(url, params={
+        def req(): 
+            return requests.get("https://www.googleapis.com/youtube/v3/channels", params={
                 "key": API_KEY,
                 "forHandle": handle,
                 "part": "snippet"
             }, timeout=10)
-            used_quota += 1; set_quota_usage(GIST_ID, GIST_TOKEN, used_quota, GIST_QUOTA)
+        r = api_call_with_quota(req)
+        items = r.json().get("items", [])
+        if items: channel_id = items[0]["id"]
+    elif "youtube.com/" in token:
+        m = re.search(r"/@([^/?]+)", token)
+        if m:
+            handle = unquote(m.group(1))
+            def req(): 
+                return requests.get("https://www.googleapis.com/youtube/v3/channels", params={
+                    "key": API_KEY,
+                    "forHandle": handle,
+                    "part": "snippet"
+                }, timeout=10)
+            r = api_call_with_quota(req)
             items = r.json().get("items", [])
-            if items:
-                channel_id = items[0]["id"]
+            if items: channel_id = items[0]["id"]
         else:
-            m = re.search(r"/channel/(UC[\w-]+)", token)
-            if m:
-                channel_id = m.group(1)
+            m2 = re.search(r"/channel/(UC[\w-]+)", token)
+            if m2: channel_id = m2.group(1)
     if channel_id:
-        url = "https://www.googleapis.com/youtube/v3/channels"
-        r = requests.get(url, params={
-            "key": API_KEY, "id": channel_id, "part": "snippet"
-        }, timeout=10)
-        used_quota += 1; set_quota_usage(GIST_ID, GIST_TOKEN, used_quota, GIST_QUOTA)
+        def req(): 
+            return requests.get("https://www.googleapis.com/youtube/v3/channels", params={
+                "key": API_KEY, "id": channel_id, "part": "snippet"
+            }, timeout=10)
+        r = api_call_with_quota(req)
         items = r.json().get("items", [])
         if items:
             return items[0]["snippet"]["title"]
@@ -132,11 +142,10 @@ def get_channel_title(channel_token):
     return "(추출 실패) " + token
 
 def iso8601_to_seconds(iso):
-    import re
     m = re.match(r'PT((\d+)M)?((\d+)S)?', iso)
     return int(m.group(2) or 0)*60 + int(m.group(4) or 0) if m else 0
 
-# ---------- 화이트리스트 및 UI 초기화 ----------
+# --- 앱 상태 초기화 (자동 복원) ---
 if "whitelist" not in st.session_state or not st.session_state.whitelist:
     loaded = load_whitelist_from_gist(GIST_ID, GIST_TOKEN, GIST_FILENAME)
     st.session_state.whitelist = loaded
@@ -150,11 +159,15 @@ if "whitelist" not in st.session_state:
 if "whitelist_titles" not in st.session_state:
     st.session_state.whitelist_titles = {}
 
-# ---------- 이하 기존 채널관리/실행 UI 및 로직 그대로 삽입 ----------
+# ------- UI 이하 기존 코드 그대로 배치 (모드 선택, 업로드, 리스트 관리, 실행 등) -------
+# 모드, 업로드, 수동입력, 리스트관리, 멀티셀렉트, 실행 버튼 등
+# 여기서는 기존 코드 그대로, 각 API요청(requests)하는 부분만
+# 반드시 requests.get → api_call_with_quota(lambda: requests.get(...)) 구조 사용
 
-# ... (이후 기존의 모든 UI, upload, manual 입력, 모드분기, 숏츠 추출 등) ...
+# (예시) 숏츠 영상 데이터 조회에서:
+# requests.get("https://www.googleapis.com/youtube/v3/search", ...) → api_call_with_quota(lambda: requests.get("https://www.googleapis.com/youtube/v3/search", ...))
 
-# 예시 - 화이트리스트 표시 부분:
+# 결과 표 출력:
 wh = st.session_state.whitelist
 titles = st.session_state.whitelist_titles
 if wh:
@@ -169,6 +182,4 @@ if wh:
 else:
     st.info("등록된 채널이 없습니다.")
 
-# *각 함수에서 YouTube API 요청 때마다
-# used_quota += 1; set_quota_usage(GIST_ID, GIST_TOKEN, used_quota, GIST_QUOTA)
-# 꼭! 추가할 것!
+# 이하, 기존 전체 흐름에서 requests가 YouTube API면 모두 api_call_with_quota로 래핑해주기!
