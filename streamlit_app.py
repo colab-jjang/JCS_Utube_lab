@@ -9,7 +9,7 @@ import pytz
 from datetime import timedelta
 import json
 
-SHEET_KEY = st.secrets["SHEET_KEY"]     # 반드시 실제 시트 키로!
+SHEET_KEY = st.secrets["SHEET_KEY"]    # 반드시 실제 시트 키로!
 SHEET_NAME = "Sheet1"              # 실제 시트 이름
 
 if "CREDENTIALS_JSON" in st.secrets:
@@ -513,3 +513,4 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
