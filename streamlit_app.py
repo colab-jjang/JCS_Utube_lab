@@ -195,7 +195,16 @@ def keyword_search_page(hours, max_results):
 
         # (원하는 형태로 결과 요약, 랭킹 등 출력. 아래는 예시)
         st.success(f"✅ {len(df)}개 Shorts 결과")
-        st.dataframe(df)     # ★여기에 display_results 등 상세 표시 넣어도 됨
+        st.dataframe(df,
+            use_container_width=True,
+            column_config={
+                "video_url": st.column_config.LinkColumn(
+                    "YouTube",  # 컬럼 표기명
+                    help="Shorts 동영상 바로가기",
+                    max_chars=20,
+                )
+            }
+        )     # ★여기에 display_results 등 상세 표시 넣어도 됨
 
         csv = df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
@@ -499,6 +508,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
