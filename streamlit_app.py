@@ -270,7 +270,7 @@ def channel_list_page(hours, max_results):
     for cid in channel_ids:
         try:
             # 실제 숏츠 수집 함수명은 프로젝트 환경에 맞게! (아래는 예)
-            shorts = st.session_state.scraper.getshortsfromuploadsplaylist(
+            shorts = st.session_state.scraper.get_shorts_from_uploads_playlist(
                 cid, hours=hours, maxresults=max_results
             )
             # ⬇⬇★ 반드시 이 줄을 추가! (진단 로그: 몇 개 수집됐는지, cid로 구분)
@@ -499,6 +499,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
