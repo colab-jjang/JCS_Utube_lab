@@ -194,7 +194,7 @@ def keyword_search_page(hours, max_results):
 
                     # ----------- 썸네일 표시되면 나머지 삭제
                 for idx, row in display_df.iterrows():
-                    cols = st.columns([1, 4, 2, ...])   # 필요열만큼 배분
+                    cols = st.columns([1, 4, 2, 2, 2, 2, 2])   # 필요열만큼 배분
                     with cols[0]:
                         st.image(row['썸네일'], width=100)
                     with cols[1]:
@@ -519,6 +519,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
