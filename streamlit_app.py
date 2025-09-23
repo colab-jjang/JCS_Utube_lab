@@ -194,7 +194,7 @@ def keyword_search_page(hours, max_results):
 
                     # ----------- 썸네일 표시되면 나머지 삭제
                 for idx, row in display_df.iterrows():
-                    cols = st.columns([1, 4, 2, 2, 2, 2, 2])   # 필요열만큼 배분
+                    cols = st.columns([1, 6, 4, 2, 1, 2, 2])   # 필요열만큼 배분
                     with cols[0]:
                         st.image(row['썸네일'], width=100)
                     with cols[1]:
@@ -208,8 +208,8 @@ def keyword_search_page(hours, max_results):
                     with cols[5]:
                         st.write(row['발행일'])
                     with cols[6]:
-                        # 하이퍼링크: [YouTube] 텍스트 클릭시 동영상으로 이동
-                        st.markdown(f"[YouTube]({row['URL']})", unsafe_allow_html=True)
+                        # 하이퍼링크: [Link] 텍스트 클릭시 동영상으로 이동
+                        st.markdown(f"[Link]({row['URL']})", unsafe_allow_html=True)
                 
 #                st.dataframe(
 #                    display_df,
@@ -519,6 +519,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
