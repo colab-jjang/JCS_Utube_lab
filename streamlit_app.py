@@ -192,6 +192,7 @@ def keyword_search_page(hours, max_results):
 
     if 'analysis_result' in st.session_state:
         df = st.session_state['analysis_result']
+        st.write(df.columns.tolist()) #확인 후 삭제
 
         # (원하는 형태로 결과 요약, 랭킹 등 출력. 아래는 예시)
         st.success(f"✅ {len(df)}개 Shorts 결과")
@@ -509,6 +510,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
