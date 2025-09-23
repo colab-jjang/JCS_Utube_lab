@@ -171,24 +171,63 @@ def keyword_search_page(hours, max_results):
     keyword = st.text_input("검색할 키워드를 입력하세요",
                             placeholder="예: 요리, 게임, 댄스, K-pop")
 
+#-----------------------------------------------------------------------------------------
     if keyword and st.button("🔍 검색 시작", key="keyword_search"):
         with st.spinner(f"**{keyword}** 키워드 검색 중..."):
             try:
                 shorts_data = st.session_state.scraper.get_keyword_shorts(
                     keyword, hours, max_results)
-
+    
                 if not shorts_data:
                     st.warning("❌ 검색 결과가 없습니다. 다른 키워드나 시간 범위를 시도해보세요.")
                     return
-
-                df = st.session_state.data_processor.create_dataframe(
-                    shorts_data)
-
-                st.session_state['analysis_result'] = df
-                display_results(df, f'"{keyword}" 키워드')
-
+    
+                df = st.session_state.data_processor.create_dataframe(shorts_data)
+    
+                # ----------- 여기서 랭킹 테이블 바로 그림 -----------
+                st.subheader("🏆 Shorts 랭킹")
+    
+                display_df = df[['title', 'channel', 'formatted_views', 'formatted_likes',
+                                'published_at', 'video_url']].copy()
+                display_df.columns = ['제목', '채널명', '조회수', '좋아요', '발행일', 'URL']
+                display_df.insert(0, '순위', range(1, len(display_df) + 1))
+    
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "video_url": st.column_config.LinkColumn(
+                            "YouTube 링크",
+                            help="Shorts 보러가기",
+                            max_chars=20
+                        )
+                    }
+                )
+                # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
+    
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {str(e)}")
+#-----------------------------------------------------------------------------------------
+    
+#    if keyword and st.button("🔍 검색 시작", key="keyword_search"):
+#        with st.spinner(f"**{keyword}** 키워드 검색 중..."):
+#            try:
+#                shorts_data = st.session_state.scraper.get_keyword_shorts(
+#                    keyword, hours, max_results)
+
+#                if not shorts_data:
+#                    st.warning("❌ 검색 결과가 없습니다. 다른 키워드나 시간 범위를 시도해보세요.")
+#                    return
+
+#                df = st.session_state.data_processor.create_dataframe(
+#                    shorts_data)
+
+#                st.session_state['analysis_result'] = df
+#                display_results(df, f'"{keyword}" 키워드')
+
+#            except Exception as e:
+#                st.error(f"오류가 발생했습니다: {str(e)}")
 
     if 'analysis_result' in st.session_state:
         df = st.session_state['analysis_result']
@@ -473,26 +512,26 @@ def display_results(df, source_name):
 
     st.markdown("---")
 
-    # 랭킹 테이블
-    st.subheader("🏆 Shorts 랭킹")
+    # 랭킹 테이블 - 구동 확인 후 삭제
+#    st.subheader("🏆 Shorts 랭킹")
 
-    display_df = df[['title', 'channel', 'formatted_views', 'formatted_likes',
-                     'published_at', 'video_url']].copy()
-    display_df.columns = ['제목', '채널명', '조회수', '좋아요', '발행일', 'URL']
-    display_df.insert(0, '순위', range(1, len(display_df) + 1))
+#    display_df = df[['title', 'channel', 'formatted_views', 'formatted_likes',
+#                     'published_at', 'video_url']].copy()
+#    display_df.columns = ['제목', '채널명', '조회수', '좋아요', '발행일', 'URL']
+#    display_df.insert(0, '순위', range(1, len(display_df) + 1))
 
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "video_url": st.column_config.LinkColumn(
-                "YouTube 링크",
-                help="Shorts 보러가기",
-                max_chars=20
-            )
-        }
-    )
+#    st.dataframe(
+#        display_df,
+#        use_container_width=True,
+#        hide_index=True,
+#        column_config={
+#            "video_url": st.column_config.LinkColumn(
+#                "YouTube 링크",
+#                help="Shorts 보러가기",
+#                max_chars=20
+#            )
+#        }
+#    )
 
     # CSV 다운로드
     csv_data = st.session_state.data_processor.create_download_csv(df)
@@ -509,6 +548,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
