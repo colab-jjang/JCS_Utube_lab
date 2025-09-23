@@ -245,7 +245,18 @@ def channel_list_page(hours, max_results):
             'channel_name' in st.session_state.channels_df.columns):
         st.markdown("---")
         st.subheader("🗂️ 업로드된 전체 채널 목록")
-        st.dataframe(st.session_state.channels_df, use_container_width=True)
+        df = st.session_state.channels_df.copy()
+        st.dataframe(
+            df,
+            use_container_width=True,
+            column_config={
+                "channel_url": st.column_config.LinkColumn(
+                    "채널 URL",
+                    help="채널 페이지로 바로가기",
+                    max_chars=30,
+                )
+            }
+        )
     else:
         st.info("⛔ 업로드된 채널이 없거나 'channel_name' 컬럼이 없습니다. 먼저 파일을 업로드 해 주세요.")
 
@@ -468,6 +479,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
