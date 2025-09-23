@@ -212,7 +212,7 @@ def keyword_search_page(hours, max_results):
                     with cols[4]:
                         st.markdown(f'<span style="font-size:14px">{row["좋아요"]}</span>', unsafe_allow_html=True)
                     with cols[5]:
-                        st.markdown(f'<span style="font-size:14px">{row["발행"]}</span>', unsafe_allow_html=True)
+                        st.markdown(f'<span style="font-size:14px">{row["발행일"]}</span>', unsafe_allow_html=True)
                     with cols[6]:
                         # 하이퍼링크: [Link] 텍스트 클릭시 동영상으로 이동
                         st.markdown(f'<a href="{row["LINK"]}" style="font-size:14px" target="_blank">YouTube</a>', unsafe_allow_html=True)
@@ -525,6 +525,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
