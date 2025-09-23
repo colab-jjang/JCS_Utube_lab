@@ -193,6 +193,12 @@ def keyword_search_page(hours, max_results):
 #                display_df.insert(0, '순위', range(1, len(display_df) + 1))
 
                     # ----------- 썸네일 표시되면 나머지 삭제
+                header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+                header_names = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'YouTube']
+                for i, name in enumerate(header_names):
+                    with header_cols[i]:
+                        st.markdown(f"**{name}**")   # Markdown 굵게(bold) 적용
+
                 for idx, row in display_df.iterrows():
                     cols = st.columns([2, 7, 4, 1, 1, 3, 2])   # 필요열만큼 배분
                     with cols[0]:
@@ -519,6 +525,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
