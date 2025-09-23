@@ -9,6 +9,14 @@ import pytz
 from datetime import timedelta
 import json
 
+# 페이지 설정
+st.set_page_config(
+    page_title="YouTube Shorts 랭킹 분석기",
+    page_icon="📱",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 SHEET_KEY = st.secrets["SHEET_KEY"] 
 SHEET_NAME = "Sheet1"              # 실제 시트 이름
 
@@ -37,14 +45,6 @@ if "channels_df" not in st.session_state or st.session_state.channels_df is None
     else:
         st.session_state.channels_df = pd.DataFrame(
             columns=['channel_id', 'channel_name', 'channel_url'])
-
-# 페이지 설정
-st.set_page_config(
-    page_title="YouTube Shorts 랭킹 분석기",
-    page_icon="📱",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # CSS 스타일링 (파스텔 테마)
 st.markdown("""
@@ -511,6 +511,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
