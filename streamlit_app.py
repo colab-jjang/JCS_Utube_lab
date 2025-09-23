@@ -33,6 +33,20 @@ if "channels_df" not in st.session_state or st.session_state.channels_df is None
     ws = DataProcessor.gsheet_connect(creds_dict, SHEET_KEY, SHEET_NAME)
     channels_df = DataProcessor.load_df_from_gsheet(ws)
 
+
+    #유효한 url인지 확인
+#    st.write(channels_df["channel_url"].head(10))
+    
+    if (
+        channels_df is not None
+        and not channels_df.empty
+        and 'channel_name' in channels_df.columns
+    ):
+        st.session_state.channels_df = channels_df
+    else:
+        st.session_state.channels_df = pd.DataFrame(
+            columns=['channel_id', 'channel_name', 'channel_url'])
+
 # CSS 스타일링 (파스텔 테마)
 st.markdown("""
 <style>
@@ -498,6 +512,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
