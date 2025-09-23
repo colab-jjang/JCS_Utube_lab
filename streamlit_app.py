@@ -204,18 +204,18 @@ def keyword_search_page(hours, max_results):
                     with cols[0]:
                         st.image(row['썸네일'], width=100)
                     with cols[1]:
-                        st.write(row['제목'])
+                        st.markdown(f'<span style="font-size:14px">{row["제목"]}</span>', unsafe_allow_html=True)
                     with cols[2]:
-                        st.write(row['채널명'])
+                        st.markdown(f'<span style="font-size:14px">{row["채널명"]}</span>', unsafe_allow_html=True)
                     with cols[3]:
-                        st.write(row['조회수'])
+                        st.markdown(f'<span style="font-size:14px">{row["조회수"]}</span>', unsafe_allow_html=True)
                     with cols[4]:
-                        st.write(row['좋아요'])
+                        st.markdown(f'<span style="font-size:14px">{row["좋아요"]}</span>', unsafe_allow_html=True)
                     with cols[5]:
-                        st.write(row['발행일'])
+                        st.markdown(f'<span style="font-size:14px">{row["발행"]}</span>', unsafe_allow_html=True)
                     with cols[6]:
                         # 하이퍼링크: [Link] 텍스트 클릭시 동영상으로 이동
-                        st.markdown(f"[Link]({row['URL']})", unsafe_allow_html=True)
+                        st.markdown(f'<a href="{row["LINK"]}" style="font-size:14px" target="_blank">YouTube</a>', unsafe_allow_html=True)
                 
 #                st.dataframe(
 #                    display_df,
@@ -525,6 +525,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
