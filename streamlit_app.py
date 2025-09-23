@@ -205,7 +205,14 @@ def keyword_search_page(hours, max_results):
                     }
                 )
                 # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
-    
+                csv = df.to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="CSV로 저장",
+                    data=csv,
+                    file_name="shorts_result.csv",
+                    mime="text/csv"
+                )
+
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {str(e)}")
 #-----------------------------------------------------------------------------------------
@@ -229,29 +236,29 @@ def keyword_search_page(hours, max_results):
 #            except Exception as e:
 #                st.error(f"오류가 발생했습니다: {str(e)}")
 
-    if 'analysis_result' in st.session_state:
-        df = st.session_state['analysis_result']
+#    if 'analysis_result' in st.session_state:
+#        df = st.session_state['analysis_result']
         
         # (원하는 형태로 결과 요약, 랭킹 등 출력. 아래는 예시)
-        st.success(f"✅ {len(df)}개 Shorts 결과")
-        st.dataframe(df,
-            use_container_width=True,
-            column_config={
-                "video_url": st.column_config.LinkColumn(
-                    "YouTube",  # 컬럼 표기명
-                    help="Shorts 동영상 바로가기",
-                    max_chars=20,
-                )
-            }
-        )     # ★여기에 display_results 등 상세 표시 넣어도 됨
+#        st.success(f"✅ {len(df)}개 Shorts 결과")
+#        st.dataframe(df,
+#            use_container_width=True,
+#            column_config={
+#                "video_url": st.column_config.LinkColumn(
+#                    "YouTube",  # 컬럼 표기명
+#                    help="Shorts 동영상 바로가기",
+#                    max_chars=20,
+#                )
+#            }
+ #       )     # ★여기에 display_results 등 상세 표시 넣어도 됨
 
-        csv = df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="CSV로 저장",
-            data=csv,
-            file_name="shorts_result.csv",
-            mime="text/csv"
-        )
+#        csv = df.to_csv(index=False, encoding='utf-8-sig')
+ #       st.download_button(
+  #          label="CSV로 저장",
+   #         data=csv,
+    #        file_name="shorts_result.csv",
+     #       mime="text/csv"
+      #  )
 
 
 def add_channel_form():
@@ -548,6 +555,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
