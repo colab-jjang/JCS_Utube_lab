@@ -171,29 +171,28 @@ def keyword_search_page(hours, max_results):
     keyword = st.text_input("검색할 키워드를 입력하세요",
                             placeholder="예: 요리, 게임, 댄스, K-pop")
 
-    if keyword and st.button("🔍 검색 시작", key="keyword_search"):
-        with st.spinner(f"**{keyword}** 키워드 검색 중..."):
-            try:
-                shorts_data = st.session_state.scraper.get_keyword_shorts(
-                    keyword, hours, max_results)
+#    if keyword and st.button("🔍 검색 시작", key="keyword_search"):
+#        with st.spinner(f"**{keyword}** 키워드 검색 중..."):
+#            try:
+#                shorts_data = st.session_state.scraper.get_keyword_shorts(
+#                    keyword, hours, max_results)
 
-                if not shorts_data:
-                    st.warning("❌ 검색 결과가 없습니다. 다른 키워드나 시간 범위를 시도해보세요.")
-                    return
+#                if not shorts_data:
+#                    st.warning("❌ 검색 결과가 없습니다. 다른 키워드나 시간 범위를 시도해보세요.")
+#                    return
 
-                df = st.session_state.data_processor.create_dataframe(
-                    shorts_data)
+#                df = st.session_state.data_processor.create_dataframe(
+#                    shorts_data)
 
-                st.session_state['analysis_result'] = df
-                display_results(df, f'"{keyword}" 키워드')
+#                st.session_state['analysis_result'] = df
+#                display_results(df, f'"{keyword}" 키워드')
 
-            except Exception as e:
-                st.error(f"오류가 발생했습니다: {str(e)}")
+#            except Exception as e:
+#                st.error(f"오류가 발생했습니다: {str(e)}")
 
     if 'analysis_result' in st.session_state:
         df = st.session_state['analysis_result']
-        st.write(df.columns.tolist()) #확인 후 삭제
-
+        
         # (원하는 형태로 결과 요약, 랭킹 등 출력. 아래는 예시)
         st.success(f"✅ {len(df)}개 Shorts 결과")
         st.dataframe(df,
@@ -510,6 +509,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
