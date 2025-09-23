@@ -198,7 +198,7 @@ def keyword_search_page(hours, max_results):
         st.dataframe(df,
             use_container_width=True,
             column_config={
-                "channel_url": st.column_config.LinkColumn(
+                "video_url": st.column_config.LinkColumn(
                     "YouTube",  # 컬럼 표기명
                     help="Shorts 동영상 바로가기",
                     max_chars=20,
@@ -259,7 +259,7 @@ def channel_list_page(hours, max_results):
             df,
             use_container_width=True,
             column_config={
-                "channel_url": st.column_config.LinkColumn(
+                "video_url": st.column_config.LinkColumn(
                     "채널 URL",
                     help="채널 페이지로 바로가기",
                     max_chars=30,
@@ -485,7 +485,7 @@ def display_results(df, source_name):
         use_container_width=True,
         hide_index=True,
         column_config={
-            "channel_url": st.column_config.LinkColumn(
+            "video_url": st.column_config.LinkColumn(
                 "YouTube 링크",
                 help="Shorts 보러가기",
                 max_chars=20
@@ -508,6 +508,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
