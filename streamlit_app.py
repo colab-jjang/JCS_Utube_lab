@@ -260,6 +260,26 @@ def channel_list_page(hours, max_results):
     else:
         st.info("⛔ 업로드된 채널이 없거나 'channel_name' 컬럼이 없습니다. 먼저 파일을 업로드 해 주세요.")
 
+    # 랭킹 집계용 데이터 리스트 ---------- 숏츠 검색 안될 때 진단용용
+    shortsdata = []
+
+    # 실제 분석 대상 컬럼이 일치하는지 확인 (channel_id)
+    channel_ids = st.session_state.channels_df['channel_id'].tolist()
+
+    # ★★★ 가장 중요한 핵심: 각 채널별 Shorts 수집 루프 내부 ★★★
+    for cid in channel_ids:
+        try:
+            # 실제 숏츠 수집 함수명은 프로젝트 환경에 맞게! (아래는 예)
+            shorts = st.session_state.scraper.getshortsfromuploadsplaylist(
+                cid, hours=hours, maxresults=max_results
+            )
+            # ⬇⬇★ 반드시 이 줄을 추가! (진단 로그: 몇 개 수집됐는지, cid로 구분)
+            st.write(f"채널ID {cid} : 수집된 Shorts {len(shorts)}개")
+            shortsdata.extend(shorts)
+        except Exception as e:
+            # ⬇⬇★ 이 부분도 반드시! (에러 발생시 원인 파악)
+            st.write(f"채널ID {cid} 오류 : {str(e)}")
+
     # 2. '분석' 버튼 (등록된 데이터가 있을 때만)
     if ('channels_df' in st.session_state and
         st.session_state.channels_df is not None and
@@ -479,6 +499,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
