@@ -255,6 +255,7 @@ def channel_list_page(hours, max_results):
         st.markdown("---")
         st.subheader("🗂️ 업로드된 전체 채널 목록")
         df = st.session_state.channels_df.copy()
+        st.write(df.columns.tolist()) # 확인 후 삭제
         st.dataframe(
             df,
             use_container_width=True,
@@ -508,6 +509,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
