@@ -122,7 +122,7 @@ def main():
     # 사이드바 메뉴
     st.sidebar.title("🎯 메뉴 선택")
     page = st.sidebar.selectbox("페이지를 선택하세요",
-                                ["📂 카테고리별 랭킹", "🔍 키워드 검색 랭킹", "📋 채널 목록 랭킹"])
+                                ["🔍 키워드 검색 랭킹", "📋 채널 목록 랭킹"])
 
     # 시간 범위 설정
     st.sidebar.markdown("---")
@@ -160,55 +160,10 @@ def main():
         f"🕓 쿼터 리셋(KST)까지 {time_left.days}일 {hours}시간 {minutes}분 {seconds}초 남음")
 
     # 페이지별 라우팅
-    if page == "📂 카테고리별 랭킹":
-        category_ranking_page(hours, max_results)
-    elif page == "🔍 키워드 검색 랭킹":
+    if page == "🔍 키워드 검색 랭킹":
         keyword_search_page(hours, max_results)
     elif page == "📋 채널 목록 랭킹":
         channel_list_page(hours, max_results)
-
-
-def category_ranking_page(hours, max_results):
-    st.header("📂 카테고리별 인기 Shorts 랭킹")
-
-    categories = st.session_state.scraper.get_category_list()
-    selected_category = st.selectbox("카테고리를 선택하세요",
-                                     options=list(categories.keys()),
-                                     format_func=lambda x: categories[x])
-
-    if st.button("🔍 분석 시작", key="category_search"):
-        with st.spinner(f"**{categories[selected_category]}** 카테고리 분석 중..."):
-            try:
-                shorts_data = st.session_state.scraper.get_category_shorts(
-                    selected_category, hours, max_results)
-
-                if not shorts_data:
-                    st.warning("❌ 데이터를 찾을 수 없습니다. 다른 카테고리나 시간 범위를 시도해보세요.")
-                    return
-
-                df = st.session_state.data_processor.create_dataframe(
-                    shorts_data)
-
-                st.session_state['analysis_result'] = df
-
-            except Exception as e:
-                st.error(f"오류가 발생했습니다: {str(e)}")
-
-    if 'analysis_result' in st.session_state:
-        df = st.session_state['analysis_result']
-
-        # (원하는 형태로 결과 요약, 랭킹 등 출력. 아래는 예시)
-        st.success(f"✅ {len(df)}개 Shorts 결과")
-        st.dataframe(df)     # ★여기에 display_results 등 상세 표시 넣어도 됨
-
-        csv = df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="CSV로 저장",
-            data=csv,
-            file_name="shorts_result.csv",
-            mime="text/csv"
-        )
-
 
 def keyword_search_page(hours, max_results):
     st.header("🔍 키워드 검색 기반 Shorts 랭킹")
@@ -513,5 +468,6 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
