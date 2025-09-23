@@ -261,7 +261,7 @@ def channel_list_page(hours, max_results):
             df,
             use_container_width=True,
             column_config={
-                "video_url": st.column_config.LinkColumn(
+                "channel_url": st.column_config.LinkColumn(
                     "채널 URL",
                     help="채널 페이지로 바로가기",
                     max_chars=30,
@@ -510,6 +510,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
