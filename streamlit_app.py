@@ -197,7 +197,7 @@ def keyword_search_page(hours, max_results):
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "video_url": st.column_config.LinkColumn(
+                        "url": st.column_config.LinkColumn(
                             "YouTube 링크",
                             help="Shorts 보러가기",
                             max_chars=20
@@ -216,50 +216,6 @@ def keyword_search_page(hours, max_results):
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {str(e)}")
 #-----------------------------------------------------------------------------------------
-    
-#    if keyword and st.button("🔍 검색 시작", key="keyword_search"):
-#        with st.spinner(f"**{keyword}** 키워드 검색 중..."):
-#            try:
-#                shorts_data = st.session_state.scraper.get_keyword_shorts(
-#                    keyword, hours, max_results)
-
-#                if not shorts_data:
-#                    st.warning("❌ 검색 결과가 없습니다. 다른 키워드나 시간 범위를 시도해보세요.")
-#                    return
-
-#                df = st.session_state.data_processor.create_dataframe(
-#                    shorts_data)
-
-#                st.session_state['analysis_result'] = df
-#                display_results(df, f'"{keyword}" 키워드')
-
-#            except Exception as e:
-#                st.error(f"오류가 발생했습니다: {str(e)}")
-
-#    if 'analysis_result' in st.session_state:
-#        df = st.session_state['analysis_result']
-        
-        # (원하는 형태로 결과 요약, 랭킹 등 출력. 아래는 예시)
-#        st.success(f"✅ {len(df)}개 Shorts 결과")
-#        st.dataframe(df,
-#            use_container_width=True,
-#            column_config={
-#                "video_url": st.column_config.LinkColumn(
-#                    "YouTube",  # 컬럼 표기명
-#                    help="Shorts 동영상 바로가기",
-#                    max_chars=20,
-#                )
-#            }
- #       )     # ★여기에 display_results 등 상세 표시 넣어도 됨
-
-#        csv = df.to_csv(index=False, encoding='utf-8-sig')
- #       st.download_button(
-  #          label="CSV로 저장",
-   #         data=csv,
-    #        file_name="shorts_result.csv",
-     #       mime="text/csv"
-      #  )
-
 
 def add_channel_form():
     st.subheader("➕ 채널 수동 추가")
@@ -519,27 +475,6 @@ def display_results(df, source_name):
 
     st.markdown("---")
 
-    # 랭킹 테이블 - 구동 확인 후 삭제
-#    st.subheader("🏆 Shorts 랭킹")
-
-#    display_df = df[['title', 'channel', 'formatted_views', 'formatted_likes',
-#                     'published_at', 'video_url']].copy()
-#    display_df.columns = ['제목', '채널명', '조회수', '좋아요', '발행일', 'URL']
-#    display_df.insert(0, '순위', range(1, len(display_df) + 1))
-
-#    st.dataframe(
-#        display_df,
-#        use_container_width=True,
-#        hide_index=True,
-#        column_config={
-#            "video_url": st.column_config.LinkColumn(
-#                "YouTube 링크",
-#                help="Shorts 보러가기",
-#                max_chars=20
-#            )
-#        }
-#    )
-
     # CSV 다운로드
     csv_data = st.session_state.data_processor.create_download_csv(df)
     if csv_data:
@@ -555,6 +490,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
