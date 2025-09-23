@@ -32,10 +32,6 @@ if "channels_df" not in st.session_state or st.session_state.channels_df is None
     creds_dict = json.loads(creds_json)
     ws = DataProcessor.gsheet_connect(creds_dict, SHEET_KEY, SHEET_NAME)
     channels_df = DataProcessor.load_df_from_gsheet(ws)
-
-
-    #유효한 url인지 확인
-#    st.write(channels_df["channel_url"].head(10))
     
     if (
         channels_df is not None
@@ -202,7 +198,7 @@ def keyword_search_page(hours, max_results):
         st.dataframe(df,
             use_container_width=True,
             column_config={
-                "channel_url": st.column_config.LinkColumn(
+                "videourl": st.column_config.LinkColumn(
                     "YouTube",  # 컬럼 표기명
                     help="Shorts 동영상 바로가기",
                     max_chars=20,
@@ -512,6 +508,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
