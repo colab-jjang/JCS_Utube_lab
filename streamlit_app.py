@@ -187,23 +187,42 @@ def keyword_search_page(hours, max_results):
                 # ----------- 여기서 랭킹 테이블 바로 그림 -----------
                 st.subheader("🏆 Shorts 랭킹")
     
-                display_df = df[['title', 'channel', 'formatted_views', 'formatted_likes',
+                display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes',
                                 'published_at', 'video_url']].copy()
-                display_df.columns = ['제목', '채널명', '조회수', '좋아요', '발행일', 'URL']
-                display_df.insert(0, '순위', range(1, len(display_df) + 1))
-    
-                st.dataframe(
-                    display_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "URL": st.column_config.LinkColumn(
-                            "YouTube 링크",
-                            help="Shorts 보러가기",
-                            max_chars=20
-                        )
-                    }
-                )
+                display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'URL']
+#                display_df.insert(0, '순위', range(1, len(display_df) + 1))
+
+                    # ----------- 썸네일 표시되면 나머지 삭제
+                for idx, row in display_df.iterrows():
+                    cols = st.columns([1, 4, 2, ...])   # 필요열만큼 배분
+                    with cols[0]:
+                        st.image(row['썸네일'], width=100)
+                    with cols[1]:
+                        st.write(row['제목'])
+                    with cols[2]:
+                        st.write(row['채널명'])
+                    with cols[3]:
+                        st.write(row['조회수'])
+                    with cols[4]:
+                        st.write(row['좋아요'])
+                    with cols[5]:
+                        st.write(row['발행일'])
+                    with cols[6]:
+                        # 하이퍼링크: [YouTube] 텍스트 클릭시 동영상으로 이동
+                        st.markdown(f"[YouTube]({row['URL']})", unsafe_allow_html=True)
+                
+#                st.dataframe(
+#                    display_df,
+#                    use_container_width=True,
+#                    hide_index=True,
+#                    column_config={
+#                        "URL": st.column_config.LinkColumn(
+#                            "YouTube 링크",
+#                            help="Shorts 보러가기",
+#                            max_chars=20
+#                        )
+#                    }
+#                )
                 # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
@@ -500,6 +519,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
