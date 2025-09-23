@@ -257,7 +257,7 @@ def channel_list_page(hours, max_results):
         st.markdown("---")
         st.subheader("🗂️ 업로드된 전체 채널 목록")
         df = st.session_state.channels_df.copy()
-        st.write(df.columns.tolist()) # 확인 후 삭제
+#        st.write(df.columns.tolist()) # 확인 후 삭제
         st.dataframe(
             df,
             use_container_width=True,
@@ -343,7 +343,17 @@ def channel_list_page(hours, max_results):
     if 'analysis_result' in st.session_state:
         df = st.session_state['analysis_result']
         st.subheader("최신 분석 결과")
-        st.dataframe(df)
+        st.dataframe(df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "video_url": st.column_config.LinkColumn(
+                    "YouTube 링크",
+                    help="Shorts 동영상 바로가기",
+                    max_chars=20
+                )
+            }
+        )
         csv = df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
             label="CSV로 저장",
@@ -490,6 +500,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
