@@ -197,7 +197,7 @@ def keyword_search_page(hours, max_results):
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "channel_url": st.column_config.LinkColumn(
+                        "channelurl": st.column_config.LinkColumn(
                             "YouTube 링크",
                             help="Shorts 보러가기",
                             max_chars=20
@@ -490,6 +490,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
