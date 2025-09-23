@@ -10,12 +10,12 @@ from datetime import timedelta
 import json
 
 # 페이지 설정
-st.set_page_config(
-    page_title="YouTube Shorts 랭킹 분석기",
-    page_icon="📱",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+#st.set_page_config(
+#    page_title="YouTube Shorts 랭킹 분석기",
+#    page_icon="📱",
+#    layout="wide",
+#    initial_sidebar_state="expanded"
+#)
 
 SHEET_KEY = st.secrets["SHEET_KEY"] 
 SHEET_NAME = "Sheet1"              # 실제 시트 이름
@@ -511,6 +511,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
