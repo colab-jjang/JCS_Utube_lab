@@ -384,7 +384,14 @@ def channel_list_page(hours, max_results):
     if 'analysis_result' in st.session_state:
         df = st.session_state['analysis_result']
         st.subheader("최신 분석 결과")
-        st.dataframe(df,
+
+        # ----- 정렬 옵션 UI 추가 -----
+        sort_col = st.selectbox("정렬할 컬럼", list(df.columns), index=0)
+        sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
+        ascending = sort_order == '오름차순'
+        sorted_df = df.sort_values(by=sort_col, ascending=ascending)
+        
+        st.dataframe(sorted_df,
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -395,7 +402,7 @@ def channel_list_page(hours, max_results):
                 )
             }
         )
-        csv = df.to_csv(index=False, encoding='utf-8-sig')
+        csv = sorted_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
             label="CSV로 저장",
             data=csv,
@@ -541,6 +548,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
