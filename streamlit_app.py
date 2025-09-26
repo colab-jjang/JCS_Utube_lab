@@ -208,7 +208,7 @@ def keyword_search_page(hours, max_results):
         header_names = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
         for i, name in enumerate(header_names):
             with header_cols[i]:
-                st.markdown(f"**{name}**")   # Markdown 굵게(bold) 적용
+                st.markdown(f"<span style='font-size:14px; font-weight:bold'>{name}</span>", unsafe_allow_html=True)   # Markdown 굵게(bold) 적용
     
         for idx, row in sorted_df.iterrows():
             cols = st.columns([2, 7, 4, 1, 1, 3, 2])   # 필요열만큼 배분
@@ -462,6 +462,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
