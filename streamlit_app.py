@@ -274,7 +274,6 @@ def channel_list_page(hours, max_results):
     if ('channels_df' in st.session_state and
         st.session_state.channels_df is not None and
             'channel_name' in st.session_state.channels_df.columns):
-        st.markdown("---")
         st.subheader("🗂️ 업로드된 전체 채널 목록")
         df = st.session_state.channels_df.copy()
 
@@ -299,95 +298,57 @@ def channel_list_page(hours, max_results):
 #    channel_ids = st.session_state.channels_df['channel_id'].tolist()
 
     # 2. '분석' 버튼 (등록된 데이터가 있을 때만)
-    if ('channels_df' in st.session_state and
-        st.session_state.channels_df is not None and
-        not st.session_state.channels_df.empty and
-            'channel_id' in st.session_state.channels_df.columns):
+    if (
+        not st.session_state.channels_df.empty
+        and 'channel_id' in st.session_state.channels_df.columns):
+
+        channel_ids = st.session_state.channels_df['channel_id'].tolist()
 
         if st.button("🔍 등록된 채널로 분석", key="channel_search_now"):
-            raw_channel_ids = st.session_state.channels_df['channel_id'].tolist(
-            )
-            api_key = os.getenv("YOUTUBE_API_KEY")
-            channel_ids = []
-            for user_input in raw_channel_ids:
-                if str(user_input).strip().startswith('UC'):
-                    cid = str(user_input).strip()
-                elif str(user_input).strip().startswith('@'):
-                    # 변환 함수는 유틸(py) 또는 SCRAPER.py 클래스에 정의되어 있어야 함
-                    cid = st.session_state.scraper.handle_to_channel_id(
-                        str(user_input).strip(), api_key)
-                else:
-                    cid = None
-                if cid:
-                    channel_ids.append(cid)
-            # 이제 channel_ids에는 모두 UC~만 남음!
-
             with st.spinner(f"{len(channel_ids)}개 채널 분석 중..."):
                 try:
                     shorts_data = []
+                    api_key = os.getenv("YOUTUBE_API_KEY")
                     for cid in channel_ids:
+                        # ▶️ 각 채널별 숏츠 불러오기 (scraper 구조에 맞춰 직접 수정 필요)
                         shorts = st.session_state.scraper.get_shorts_from_uploads_playlist(
                             cid, hours=hours, max_results=max_results
                         )
                         shorts_data.extend(shorts)
-                    shorts_data.sort(key=lambda x: int(
-                        x['view_count']), reverse=True)
+                    # 정렬 후 top-N만
+                    shorts_data.sort(key=lambda x: int(x['view_count']), reverse=True)
                     shorts_data = shorts_data[:max_results]
 
                     if not shorts_data:
                         st.warning("❌ 해당 채널들에서 최근 Shorts를 찾을 수 없습니다.")
                         return
 
-                    df = st.session_state.data_processor.create_dataframe(
-                        shorts_data)
+                    df = st.session_state.data_processor.create_dataframe(shorts_data)
+                    display_df = df[['thumbnail', 'title', 'channel', 'formatted_views', 'formatted_likes', 'published_at', 'video_url']].copy()
+                    display_df.columns = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
 
-                    display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes','published_at', 'video_url']].copy()
-                    display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
-                    
-                    # 🚩분석 직후 반드시 세션에 저장
+                    # 결과 세션 저장
                     st.session_state['channel_shorts_display_df'] = display_df
+                    st.success("분석이 완료되었습니다! 아래에서 결과를 확인하세요.")
 
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {str(e)}")
 
-    if "analysis_result" not in st.session_state:
-        st.session_state["analysis_result"] = None
-    
-    keyword = st.text_input("검색어", key="search_kw")
-    if st.button("검색"):
-        # 실제 데이터프레임 생성 (ex: df = ...)
-        result_df = ... # 만들어진 결과
-        st.session_state["analysis_result"] = result_df
-    
-    if st.session_state["analysis_result"] is not None:
-        df = st.session_state["analysis_result"]
-    
-        # 정렬 옵션
-        col = st.selectbox("정렬 컬럼", list(df.columns))
-        order = st.radio("정렬순", ["내림차순", "오름차순"])
-        asc = order == "오름차순"
-        sort_df = df.sort_values(by=col, ascending=asc)     
-    
-        st.dataframe(sorted_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "video_url": st.column_config.LinkColumn(
-                    "YouTube 링크",
-                    help="Shorts 동영상 바로가기",
-                    max_chars=20
-                )
-            }
-        )
-        csv = sorted_df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="CSV로 저장",
-            data=csv,
-            file_name="shorts_result.csv",
-            mime="text/csv"
-        )
+        # 3. 결과 즉시 출력!
+        if "channel_shorts_display_df" in st.session_state:
+            display_results(st.session_state["channel_shorts_display_df"], "채널 기준 Shorts 랭킹")
+        else:
+            st.info("아직 분석 결과가 없습니다. 분석 버튼을 먼저 눌러주세요.")
+            
+#        csv = sorted_df.to_csv(index=False, encoding='utf-8-sig')
+#        st.download_button(
+#            label="CSV로 저장",
+#            data=csv,
+#            file_name="shorts_result.csv",
+#            mime="text/csv"
+#        )
 
-    # 3. 업로드 구간
+    # 4. 업로드 구간
     st.subheader("📁 채널 목록 파일 업로드")
     api_key = os.getenv("YOUTUBE_API_KEY")
     uploaded_file = st.file_uploader(
@@ -506,6 +467,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
