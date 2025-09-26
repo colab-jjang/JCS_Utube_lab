@@ -147,6 +147,7 @@ class YouTubeScraper:
 
     def get_shorts_from_uploads_playlist(self, channel_id, hours=24, max_results=50):
         uploads_id = self.get_uploads_playlist_id(channel_id)
+        st.write("채널 id:", channel_id) #되면 삭제
         if not uploads_id:
             return []
         url = f'{self.base_url}/playlistItems'
@@ -324,4 +325,5 @@ class YouTubeScraper:
         resp = requests.get(url, params=params).json()
         if 'items' in resp and resp['items']:
             return resp['items'][0]['id']
+
         return None
