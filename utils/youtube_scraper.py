@@ -143,7 +143,7 @@ class YouTubeScraper:
     def is_short_video(self, video_details):
         duration = video_details['duration']             # PT50S 혹은 PT1M2S 등
         total_seconds = self.parse_ISO8601_duration_to_seconds(duration)
-        return total_seconds <= 60
+        return total_seconds <= 120
 
     def get_shorts_from_uploads_playlist(self, channel_id, hours=24, max_results=50):
         uploads_id = self.get_uploads_playlist_id(channel_id)
@@ -327,3 +327,4 @@ class YouTubeScraper:
             return resp['items'][0]['id']
 
         return None
+
