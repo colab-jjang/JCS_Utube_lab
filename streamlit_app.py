@@ -183,6 +183,13 @@ def keyword_search_page(hours, max_results):
                     return
     
                 df = st.session_state.data_processor.create_dataframe(shorts_data)
+                display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes',
+                                'published_at', 'video_url']].copy()
+                display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
+    
+                # ★ 중요: 분석 직후 session_state에 결과 저장!
+                st.session_state['shorts_display_df'] = display_df
+
     
                 # ----------- 여기서 랭킹 테이블 바로 그림 -----------
                 st.subheader("🏆 Shorts 랭킹")
@@ -570,6 +577,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
