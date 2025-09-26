@@ -395,22 +395,22 @@ def channel_list_page(hours, max_results):
 
 #------------------------------------------------------------------------------------------
     if "analysis_result" not in st.session_state:
-        st.session_state.analysis_result = None
+        st.session_state["analysis_result"] = None
     
-    st.text_input("검색어 ...", key="search_kw")
+    keyword = st.text_input("검색어", key="search_kw")
     if st.button("검색"):
-        # 여기가 유일하게 데이터 만드는 지점!
-        result_df = ... # 실제 데이터프레임 생성
+        # 실제 데이터프레임 생성 (ex: df = ...)
+        result_df = ... # 만들어진 결과
         st.session_state["analysis_result"] = result_df
     
     if st.session_state["analysis_result"] is not None:
         df = st.session_state["analysis_result"]
     
-        # 정렬 옵션 (항상 표 아래에 놓기!)
+        # 정렬 옵션
         col = st.selectbox("정렬 컬럼", list(df.columns))
-        order = st.radio("방향", ["⬆️", "⬇️"])
-        asc = order == "⬆️"
-        sort_df = df.sort_values(by=col, ascending=asc)        
+        order = st.radio("정렬순", ["내림차순", "오름차순"])
+        asc = order == "오름차순"
+        sort_df = df.sort_values(by=col, ascending=asc)     
 #------------------------------------------------------------------------------------------    
     
         st.dataframe(sorted_df,
@@ -570,6 +570,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
