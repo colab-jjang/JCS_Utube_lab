@@ -159,6 +159,8 @@ class YouTubeScraper:
         }
         res = requests.get(url, params=params).json()
         video_ids = [item['contentDetails']['videoId'] for item in res.get('items', [])]
+
+        st.session_state["quota_used"] = st.session_state.get("quota_used", 0) + 1
         
         # 상세정보 조회 (최대 50개, 여러 번 나눠서 할수도 있음)
         shorts = []
@@ -327,5 +329,6 @@ class YouTubeScraper:
             return resp['items'][0]['id']
 
         return None
+
 
 
