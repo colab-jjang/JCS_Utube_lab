@@ -206,16 +206,8 @@ def keyword_search_page(hours, max_results):
         display_df = st.session_state['shorts_display_df']
             
         # 1. 정렬 옵션 UI
-        sort_col = st.selectbox(
-            "정렬할 컬럼 선택",
-            ['조회수', '좋아요', '발행일'],
-            index=0
-        )
-        sort_order = st.radio(
-            "정렬순",
-            ['내림차순', '오름차순'],
-            horizontal=True
-        )
+        sort_col = st.selectbox("정렬할 컬럼 선택", ['조회수', '좋아요', '발행일'], index=0)
+        sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
         
         # 2. 실제 DataFrame 정렬
         ascending = sort_order == '오름차순'
@@ -228,7 +220,7 @@ def keyword_search_page(hours, max_results):
             with header_cols[i]:
                 st.markdown(f"**{name}**")   # Markdown 굵게(bold) 적용
     
-        for idx, row in display_df.iterrows():
+        for idx, row in sorted_df.iterrows():
             cols = st.columns([2, 7, 4, 1, 1, 3, 2])   # 필요열만큼 배분
             with cols[0]:
                 st.image(row['썸네일'], width=100)
@@ -259,7 +251,7 @@ def keyword_search_page(hours, max_results):
     #                    }
     #                )
         # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
-        csv = df.to_csv(index=False, encoding='utf-8-sig')
+        csv = sorted_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
             label="CSV로 저장",
             data=csv,
@@ -581,6 +573,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
