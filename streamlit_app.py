@@ -184,7 +184,7 @@ def keyword_search_page(hours, max_results):
     
                 df = st.session_state.data_processor.create_dataframe(shorts_data)
                 display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes','published_at', 'video_url']].copy()
-                display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
+                display_df.columns = ['제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
     
                 # ★ 중요: 분석 직후 session_state에 결과 저장!
                 st.session_state['shorts_display_df'] = display_df
@@ -195,9 +195,6 @@ def keyword_search_page(hours, max_results):
     if 'shorts_display_df' in st.session_state:
         st.subheader("🏆 Shorts 랭킹")
         display_df = st.session_state['shorts_display_df']
-
-        st.write(st.session_state.keys())
-        st.write(st.session_state.get('shorts_display_df'))
         
         # 1. 정렬 옵션 UI
         sort_col = st.selectbox("정렬할 컬럼 선택", ['조회수', '좋아요', '발행일'], index=0)
@@ -567,6 +564,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
