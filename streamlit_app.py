@@ -192,6 +192,22 @@ def keyword_search_page(hours, max_results):
                 display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
 #                display_df.insert(0, '순위', range(1, len(display_df) + 1))
 
+                # 1. 정렬 옵션 UI
+                sort_col = st.selectbox(
+                    "정렬할 컬럼 선택",
+                    ['조회수', '좋아요', '발행일'],
+                    index=0
+                )
+                sort_order = st.radio(
+                    "정렬순",
+                    ['내림차순', '오름차순'],
+                    horizontal=True
+                )
+                
+                # 2. 실제 DataFrame 정렬
+                ascending = sort_order == '오름차순'
+                sorted_df = display_df.sort_values(by=sort_col, ascending=ascending)
+                
                     # ----------- 썸네일 표시되면 나머지 삭제
                 header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
                 header_names = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
@@ -525,6 +541,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
