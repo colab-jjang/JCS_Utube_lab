@@ -190,79 +190,83 @@ def keyword_search_page(hours, max_results):
                 # ★ 중요: 분석 직후 session_state에 결과 저장!
                 st.session_state['shorts_display_df'] = display_df
 
-    
-                # ----------- 여기서 랭킹 테이블 바로 그림 -----------
-                st.subheader("🏆 Shorts 랭킹")
-    
-                display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes',
-                                'published_at', 'video_url']].copy()
-                display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
-#                display_df.insert(0, '순위', range(1, len(display_df) + 1))
-
-                # 1. 정렬 옵션 UI
-                sort_col = st.selectbox(
-                    "정렬할 컬럼 선택",
-                    ['조회수', '좋아요', '발행일'],
-                    index=0
-                )
-                sort_order = st.radio(
-                    "정렬순",
-                    ['내림차순', '오름차순'],
-                    horizontal=True
-                )
-                
-                # 2. 실제 DataFrame 정렬
-                ascending = sort_order == '오름차순'
-                sorted_df = display_df.sort_values(by=sort_col, ascending=ascending)
-                
-                    # ----------- 썸네일 표시되면 나머지 삭제
-                header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
-                header_names = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
-                for i, name in enumerate(header_names):
-                    with header_cols[i]:
-                        st.markdown(f"**{name}**")   # Markdown 굵게(bold) 적용
-
-                for idx, row in display_df.iterrows():
-                    cols = st.columns([2, 7, 4, 1, 1, 3, 2])   # 필요열만큼 배분
-                    with cols[0]:
-                        st.image(row['썸네일'], width=100)
-                    with cols[1]:
-                        st.markdown(f'<span style="font-size:14px">{row["제목"]}</span>', unsafe_allow_html=True)
-                    with cols[2]:
-                        st.markdown(f'<span style="font-size:14px">{row["채널명"]}</span>', unsafe_allow_html=True)
-                    with cols[3]:
-                        st.markdown(f'<span style="font-size:14px">{row["조회수"]}</span>', unsafe_allow_html=True)
-                    with cols[4]:
-                        st.markdown(f'<span style="font-size:14px">{row["좋아요"]}</span>', unsafe_allow_html=True)
-                    with cols[5]:
-                        st.markdown(f'<span style="font-size:14px">{row["발행일"]}</span>', unsafe_allow_html=True)
-                    with cols[6]:
-                        # 하이퍼링크: [Link] 텍스트 클릭시 동영상으로 이동
-                        st.markdown(f'<a href="{row["LINK"]}" style="font-size:14px" target="_blank">YouTube</a>', unsafe_allow_html=True)
-                
-#                st.dataframe(
-#                    display_df,
-#                    use_container_width=True,
-#                    hide_index=True,
-#                    column_config={
-#                        "URL": st.column_config.LinkColumn(
-#                            "YouTube 링크",
-#                            help="Shorts 보러가기",
-#                            max_chars=20
-#                        )
-#                    }
-#                )
-                # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
-                csv = df.to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(
-                    label="CSV로 저장",
-                    data=csv,
-                    file_name="shorts_result.csv",
-                    mime="text/csv"
-                )
-
             except Exception as e:
-                st.error(f"오류가 발생했습니다: {str(e)}")
+                st.error(f"오류: {str(e)}")
+    
+    # ----------- 여기서 랭킹 테이블 바로 그림 -----------
+#    st.subheader("🏆 Shorts 랭킹")
+    
+#    display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes',
+                    'published_at', 'video_url']].copy()
+#    display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
+    #                display_df.insert(0, '순위', range(1, len(display_df) + 1))
+
+    if 'shorts_display_df' in st.session_state:
+        st.subheader("🏆 Shorts 랭킹")
+        display_df = st.session_state['shorts_display_df']
+            
+        # 1. 정렬 옵션 UI
+        sort_col = st.selectbox(
+            "정렬할 컬럼 선택",
+            ['조회수', '좋아요', '발행일'],
+            index=0
+        )
+        sort_order = st.radio(
+            "정렬순",
+            ['내림차순', '오름차순'],
+            horizontal=True
+        )
+        
+        # 2. 실제 DataFrame 정렬
+        ascending = sort_order == '오름차순'
+        sorted_df = display_df.sort_values(by=sort_col, ascending=ascending)
+        
+            # ----------- 썸네일 표시되면 나머지 삭제
+        header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+        header_names = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
+        for i, name in enumerate(header_names):
+            with header_cols[i]:
+                st.markdown(f"**{name}**")   # Markdown 굵게(bold) 적용
+    
+        for idx, row in display_df.iterrows():
+            cols = st.columns([2, 7, 4, 1, 1, 3, 2])   # 필요열만큼 배분
+            with cols[0]:
+                st.image(row['썸네일'], width=100)
+            with cols[1]:
+                st.markdown(f'<span style="font-size:14px">{row["제목"]}</span>', unsafe_allow_html=True)
+            with cols[2]:
+                st.markdown(f'<span style="font-size:14px">{row["채널명"]}</span>', unsafe_allow_html=True)
+            with cols[3]:
+                st.markdown(f'<span style="font-size:14px">{row["조회수"]}</span>', unsafe_allow_html=True)
+            with cols[4]:
+                st.markdown(f'<span style="font-size:14px">{row["좋아요"]}</span>', unsafe_allow_html=True)
+            with cols[5]:
+                st.markdown(f'<span style="font-size:14px">{row["발행일"]}</span>', unsafe_allow_html=True)
+            with cols[6]:
+                # 하이퍼링크: [Link] 텍스트 클릭시 동영상으로 이동
+                st.markdown(f'<a href="{row["LINK"]}" style="font-size:14px" target="_blank">YouTube</a>', unsafe_allow_html=True)
+        
+    #                st.dataframe(
+    #                    display_df,
+    #                    use_container_width=True,
+    #                    hide_index=True,
+    #                    column_config={
+    #                        "URL": st.column_config.LinkColumn(
+    #                            "YouTube 링크",
+    #                            help="Shorts 보러가기",
+    #                            max_chars=20
+    #                        )
+    #                    }
+    #                )
+        # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
+        csv = df.to_csv(index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="CSV로 저장",
+            data=csv,
+            file_name="shorts_result.csv",
+            mime="text/csv"
+        )
+
 #-----------------------------------------------------------------------------------------
 
 def add_channel_form():
@@ -577,6 +581,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
