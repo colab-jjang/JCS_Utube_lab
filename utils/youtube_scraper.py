@@ -234,7 +234,7 @@ class YouTubeScraper:
                 params = {
                     'part': 'id,snippet',
                     'type': 'video',
-                    'channelID': real_channel_id,
+                    'channelId': real_channel_id,
                     'order': 'date',
                     'publishedAfter': published_after,
                     # 'videoDuration': 'short',  # 상황따라 활성화
@@ -267,6 +267,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
