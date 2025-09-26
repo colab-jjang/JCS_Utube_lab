@@ -171,7 +171,6 @@ def keyword_search_page(hours, max_results):
     keyword = st.text_input("검색할 키워드를 입력하세요",
                             placeholder="예: 요리, 게임, 댄스, K-pop")
 
-#-----------------------------------------------------------------------------------------
     if keyword and st.button("🔍 검색 시작", key="keyword_search"):
         with st.spinner(f"**{keyword}** 키워드 검색 중..."):
             try:
@@ -229,18 +228,6 @@ def keyword_search_page(hours, max_results):
                 # 하이퍼링크: [Link] 텍스트 클릭시 동영상으로 이동
                 st.markdown(f'<a href="{row["LINK"]}" style="font-size:14px" target="_blank">YouTube</a>', unsafe_allow_html=True)
         
-    #                st.dataframe(
-    #                    display_df,
-    #                    use_container_width=True,
-    #                    hide_index=True,
-    #                    column_config={
-    #                        "URL": st.column_config.LinkColumn(
-    #                            "YouTube 링크",
-    #                            help="Shorts 보러가기",
-    #                            max_chars=20
-    #                        )
-    #                    }
-    #                )
         # ----------- 필요하면 CSV 다운로드 등 추가 가능 -----------
         csv = sorted_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
@@ -249,8 +236,6 @@ def keyword_search_page(hours, max_results):
             file_name="shorts_result.csv",
             mime="text/csv"
         )
-
-#-----------------------------------------------------------------------------------------
 
 def add_channel_form():
     st.subheader("➕ 채널 수동 추가")
@@ -292,7 +277,7 @@ def channel_list_page(hours, max_results):
         st.markdown("---")
         st.subheader("🗂️ 업로드된 전체 채널 목록")
         df = st.session_state.channels_df.copy()
-#        st.write(df.columns.tolist()) # 확인 후 삭제
+
         st.dataframe(
             df,
             use_container_width=True,
@@ -307,25 +292,11 @@ def channel_list_page(hours, max_results):
     else:
         st.info("⛔ 업로드된 채널이 없거나 'channel_name' 컬럼이 없습니다. 먼저 파일을 업로드 해 주세요.")
 
-    # 랭킹 집계용 데이터 리스트 ---------- 숏츠 검색 안될 때 진단용용
+    # 랭킹 집계용 데이터 리스트 ---------- 숏츠 검색 안될 때 진단용
 #    shortsdata = []
 
     # 실제 분석 대상 컬럼이 일치하는지 확인 (channel_id)
 #    channel_ids = st.session_state.channels_df['channel_id'].tolist()
-
-    # ★★★ 가장 중요한 핵심: 각 채널별 Shorts 수집 루프 내부 ★★★
-#    for cid in channel_ids:
-#        try:
-            # 실제 숏츠 수집 함수명은 프로젝트 환경에 맞게! (아래는 예)
-#            shorts = st.session_state.scraper.get_shorts_from_uploads_playlist(
-#                cid, hours=hours, max_results=max_results
-#            )
-            # ⬇⬇★ 반드시 이 줄을 추가! (진단 로그: 몇 개 수집됐는지, cid로 구분)
-#            st.write(f"채널ID {cid} : 수집된 Shorts {len(shorts)}개")
-#            shortsdata.extend(shorts)
-#        except Exception as e:
-            # ⬇⬇★ 이 부분도 반드시! (에러 발생시 원인 파악)
-#            st.write(f"채널ID {cid} 오류 : {str(e)}")
 
     # 2. '분석' 버튼 (등록된 데이터가 있을 때만)
     if ('channels_df' in st.session_state and
@@ -369,25 +340,16 @@ def channel_list_page(hours, max_results):
 
                     df = st.session_state.data_processor.create_dataframe(
                         shorts_data)
+
+                    display_df = df[['thumbnail','title', 'channel', 'formatted_views', 'formatted_likes','published_at', 'video_url']].copy()
+                    display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
+                    
                     # 🚩분석 직후 반드시 세션에 저장
-                    st.session_state['analysis_result'] = df
+                     st.session_state['channel_shorts_display_df'] = display_df
 
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {str(e)}")
-    # 🚩항상 화면에 결과 테이블/다운로드 버튼 표시 (if문 안에서 벗어나 있어야 함!)
-#    if 'analysis_result' in st.session_state:
-#        df = st.session_state['analysis_result']
-#        st.subheader("최신 분석 결과")
 
-        # ----- 정렬 옵션 UI 추가 -----
-#        df['조회수'] = df['조회수'].astype(int)
-#        df['좋아요'] = df['좋아요'].astype(int)
-#        sort_col = st.selectbox("정렬할 컬럼", list(df.columns), index=0)
-#        sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
-#        ascending = sort_order == '오름차순'
-#        sorted_df = df.sort_values(by=sort_col, ascending=ascending)
-
-#------------------------------------------------------------------------------------------
     if "analysis_result" not in st.session_state:
         st.session_state["analysis_result"] = None
     
@@ -405,7 +367,6 @@ def channel_list_page(hours, max_results):
         order = st.radio("정렬순", ["내림차순", "오름차순"])
         asc = order == "오름차순"
         sort_df = df.sort_values(by=col, ascending=asc)     
-#------------------------------------------------------------------------------------------    
     
         st.dataframe(sorted_df,
             use_container_width=True,
@@ -501,69 +462,51 @@ def channel_list_page(hours, max_results):
 
 
 def display_results(df, source_name):
-    """결과 표시 함수"""
-    if df.empty:
-        st.warning("표시할 데이터가 없습니다.")
-        return
+    if 'channel_shorts_display_df' in st.session_state:
+        st.subheader("📋 채널 기준 Shorts 랭킹")
+        display_df = st.session_state['channel_shorts_display_df']
 
-    st.success(f"✅ **{source_name}**에서 **{len(df)}개**의 Shorts를 찾았습니다!")
+        sort_col = st.selectbox("정렬할 컬럼(채널)", ['조회수', '좋아요', '발행일'], index=0)
+        sort_order = st.radio("정렬순(채널)", ['내림차순', '오름차순'], horizontal=True)
+        ascending = sort_order == '오름차순'
+        sorted_df = display_df.sort_values(by=sort_col, ascending=ascending)
 
-    # 통계 정보
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        total_views = df['view_count'].sum()
-        st.markdown(f"""
-        <div class="metric-card">
-            <h4>총 조회수</h4>
-            <h2>{st.session_state.data_processor.format_number(total_views)}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        total_likes = df['like_count'].sum()
-        st.markdown(f"""
-        <div class="metric-card">
-            <h4>총 좋아요</h4>
-            <h2>{st.session_state.data_processor.format_number(total_likes)}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        avg_views = df['view_count'].mean()
-        st.markdown(f"""
-        <div class="metric-card">
-            <h4>평균 조회수</h4>
-            <h2>{st.session_state.data_processor.format_number(avg_views)}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        unique_channels = df['channel'].nunique()
-        st.markdown(f"""
-        <div class="metric-card">
-            <h4>채널 수</h4>
-            <h2>{unique_channels}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # CSV 다운로드
-    csv_data = st.session_state.data_processor.create_download_csv(df)
-    if csv_data:
-        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+        header_names = ['썸네일','제목','채널명','조회수','좋아요','발행일','LINK']
+        for i, name in enumerate(header_names):
+            with header_cols[i]:
+                st.markdown(f"**{name}**")
+        for idx, row in sorted_df.iterrows():
+            cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+            with cols[0]:
+                st.image(row['썸네일'], width=100)
+            with cols[1]:
+                st.markdown(f'<span style="font-size:14px">{row["제목"]}</span>', unsafe_allow_html=True)
+            with cols[2]:
+                st.markdown(f'<span style="font-size:14px">{row["채널명"]}</span>', unsafe_allow_html=True)
+            with cols[3]:
+                st.markdown(f'<span style="font-size:14px">{row["조회수"]}</span>', unsafe_allow_html=True)
+            with cols[4]:
+                st.markdown(f'<span style="font-size:14px">{row["좋아요"]}</span>', unsafe_allow_html=True)
+            with cols[5]:
+                st.markdown(f'<span style="font-size:14px">{row["발행일"]}</span>', unsafe_allow_html=True)
+            with cols[6]:
+                st.markdown(f'<a href="{row["LINK"]}" style="font-size:14px" target="_blank">YouTube</a>', unsafe_allow_html=True)
+    
+        csv = sorted_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
-            label="📥 결과를 CSV로 다운로드",
-            data=csv_data,
-            file_name=f"youtube_shorts_ranking_{current_time}.csv",
-            mime="text/csv",
-            key="download_csv"
+            label="CSV로 저장(채널)",
+            data=csv,
+            file_name="channels_shorts_result.csv",
+            mime="text/csv"
         )
+    else:
+            st.warning("채널 shorts 결과 데이터가 없습니다.")
 
 
 if __name__ == "__main__":
     main()
+
 
 
 
