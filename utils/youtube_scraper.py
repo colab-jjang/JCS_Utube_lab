@@ -230,7 +230,6 @@ class YouTubeScraper:
                 continue
             
             try:
-                st.write("search params:", params)
                 search_url = f"{self.base_url}/search"
                 params = {
                     'part': 'id,snippet',
@@ -242,7 +241,7 @@ class YouTubeScraper:
                     'maxResults': 20,  # or 50
                     'key': self.api_key
                 }
-
+                st.write("search params:", params)
                 response = requests.get(search_url, params=params)
                 data = response.json()
 
@@ -264,14 +263,15 @@ class YouTubeScraper:
                                 'duration': video_details.get('duration', '')
                             })
 
-                st.write("search params:", params)
-                st.write("search result:", data)
+#                st.write("search params:", params)
+#                st.write("search result:", data)
 
             except Exception as e:
                 print(f"Error processing channel {channel_id}: {e}")
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
