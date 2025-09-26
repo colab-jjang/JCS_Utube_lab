@@ -180,7 +180,7 @@ class YouTubeScraper:
                 except:
                     published_at = None
                 sec = self.parse_ISO8601_duration_to_seconds(duration)
-                if sec <= 60 and published_at and published_at > published_after:
+                if sec <= 120 and published_at and published_at > published_after:
                     shorts.append({
                         'video_id': v['id'],
                         'title': v['snippet']['title'],
@@ -327,4 +327,5 @@ class YouTubeScraper:
             return resp['items'][0]['id']
 
         return None
+
 
