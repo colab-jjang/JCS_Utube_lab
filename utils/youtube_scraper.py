@@ -241,11 +241,10 @@ class YouTubeScraper:
                     'maxResults': 20,  # or 50
                     'key': self.api_key
                 }
-                st.write("search params:", params)
+#                st.write("search params:", params)
                 response = requests.get(search_url, params=params)
                 data = response.json()
-
-                st.write("search result:", data)
+#                st.write("search result:", data)
                 
                 if 'items' in data:
                     for item in data['items']:
@@ -271,6 +270,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
