@@ -138,7 +138,7 @@ def main():
 
     # (예시) 쿼터 한도/사용량 세팅 (실제로는 데이터 가공값을 연결)
     quota_limit = st.session_state.get('quota_limit', 10000)
-    quota_used = st.session_state.get('quota_used', 4250)
+    quota_used = st.session_state.get('quota_used', 0)
 
     quota_pct = quota_used / quota_limit if quota_limit else 0
     st.sidebar.progress(
@@ -470,6 +470,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
