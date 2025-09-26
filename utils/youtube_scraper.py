@@ -204,12 +204,25 @@ class YouTubeScraper:
         all_shorts = []
         published_after = (datetime.now() - timedelta(hours=hours)).isoformat() + "Z"
         for channel_id in channel_ids:
+            
+            real_channelid = None
+            if str(channelid).strip().startswith('UC'):
+                real_channelid = channelid.strip()
+            elif str(channelid).strip().startswith('@'):
+                real_channelid = self.handle_to_channelid(channelid.strip())
+                if not real_channelid:
+                    print(f"handle({channelid}) → 채널ID 변환 실패, PASS")
+                    continue    # 건너뜀
+            else:
+                print(f"올바른 채널ID/핸들이 아님: {channelid}, PASS")
+                continue
+            
             try:
                 search_url = f"{self.base_url}/search"
                 params = {
                     'part': 'id,snippet',
                     'type': 'video',
-                    'channelId': channel_id,
+                    'channelId': real_channelid,
                     'order': 'date',
                     'publishedAfter': published_after,
                     # 'videoDuration': 'short',  # 상황따라 활성화
@@ -242,5 +255,6 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
