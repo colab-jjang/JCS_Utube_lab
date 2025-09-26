@@ -9,6 +9,18 @@ class YouTubeScraper:
         self.api_key = st.secrets.get("YOUTUBE_API_KEY") or os.getenv("YOUTUBE_API_KEY")
         self.base_url = "https://www.googleapis.com/youtube/v3"
 
+    def handle_to_channelid(self, handle):
+        url = f"{self.baseurl}/channels"
+        params = {
+            "part": "id",
+            "forHandle": handle.lstrip("@"),
+            "key": self.apikey
+        }
+        resp = requests.get(url, params=params).json()
+        if "items" in resp and resp["items"]:
+            return resp["items"][0]["id"]
+        return None
+    
     def get_uploads_playlist_id(self, channel_id):
         """유튜브 채널ID→해당 채널의 업로드 Playlist ID 반환"""
         if not self.api_key:
@@ -255,6 +267,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
