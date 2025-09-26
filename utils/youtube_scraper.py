@@ -135,7 +135,7 @@ class YouTubeScraper:
         try:
             total_seconds = self.parse_ISO8601_duration_to_seconds(duration)
             # 공식 shorts 한계는 60초이지만, 더 여유있게 120초까지 허용해도 OK!
-            return total_seconds <= 60
+            return total_seconds <= 120
         except:
             return False
 
@@ -267,6 +267,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
