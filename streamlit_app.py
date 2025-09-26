@@ -204,7 +204,11 @@ def keyword_search_page(hours, max_results):
     if 'shorts_display_df' in st.session_state:
         st.subheader("🏆 Shorts 랭킹")
         display_df = st.session_state['shorts_display_df']
-            
+
+        st.write(st.session_state.keys())
+        st.write(st.session_state.get('shorts_display_df'))
+
+        
         # 1. 정렬 옵션 UI
         sort_col = st.selectbox("정렬할 컬럼 선택", ['조회수', '좋아요', '발행일'], index=0)
         sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
@@ -573,6 +577,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
