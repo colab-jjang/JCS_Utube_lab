@@ -381,18 +381,38 @@ def channel_list_page(hours, max_results):
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {str(e)}")
     # 🚩항상 화면에 결과 테이블/다운로드 버튼 표시 (if문 안에서 벗어나 있어야 함!)
-    if 'analysis_result' in st.session_state:
-        df = st.session_state['analysis_result']
-        st.subheader("최신 분석 결과")
+#    if 'analysis_result' in st.session_state:
+#        df = st.session_state['analysis_result']
+#        st.subheader("최신 분석 결과")
 
         # ----- 정렬 옵션 UI 추가 -----
-        df['조회수'] = df['조회수'].astype(int)
-        df['좋아요'] = df['좋아요'].astype(int)
-        sort_col = st.selectbox("정렬할 컬럼", list(df.columns), index=0)
-        sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
-        ascending = sort_order == '오름차순'
-        sorted_df = df.sort_values(by=sort_col, ascending=ascending)
-        
+#        df['조회수'] = df['조회수'].astype(int)
+#        df['좋아요'] = df['좋아요'].astype(int)
+#        sort_col = st.selectbox("정렬할 컬럼", list(df.columns), index=0)
+#        sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
+#        ascending = sort_order == '오름차순'
+#        sorted_df = df.sort_values(by=sort_col, ascending=ascending)
+
+#------------------------------------------------------------------------------------------
+    if "analysis_result" not in st.session_state:
+        st.session_state.analysis_result = None
+    
+    st.text_input("검색어 ...", key="search_kw")
+    if st.button("검색"):
+        # 여기가 유일하게 데이터 만드는 지점!
+        result_df = ... # 실제 데이터프레임 생성
+        st.session_state["analysis_result"] = result_df
+    
+    if st.session_state["analysis_result"] is not None:
+        df = st.session_state["analysis_result"]
+    
+        # 정렬 옵션 (항상 표 아래에 놓기!)
+        col = st.selectbox("정렬 컬럼", list(df.columns))
+        order = st.radio("방향", ["⬆️", "⬇️"])
+        asc = order == "⬆️"
+        sort_df = df.sort_values(by=col, ascending=asc)        
+#------------------------------------------------------------------------------------------    
+    
         st.dataframe(sorted_df,
             use_container_width=True,
             hide_index=True,
@@ -550,6 +570,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
