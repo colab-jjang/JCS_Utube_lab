@@ -307,25 +307,17 @@ def channel_list_page(hours, max_results):
         if st.button("🔍 등록된 채널로 분석", key="channel_search_now"):
             with st.spinner(f"{len(channel_ids)}개 채널 분석 중..."):
                 try:
-                    shorts_data = []
-                    api_key = os.getenv("YOUTUBE_API_KEY")
-                    for cid in channel_ids:
-                        # ▶️ 각 채널별 숏츠 불러오기 (scraper 구조에 맞춰 직접 수정 필요)
-                        shorts = st.session_state.scraper.get_shorts_from_uploads_playlist(
-                            cid, hours=hours, max_results=max_results
-                        )                        
-                        #확인되면 여기 삭제
-                        st.write(f"{cid} / 가져온 shorts 수: {len(shorts)}, shorts 데이터:", shorts)
-                        
-                        shorts_data.extend(shorts)
-                    # 정렬 후 top-N만
+                    shorts_data = st.session_state.scraper.get_channel_shorts(
+                        channel_ids, hours=hours, max_results=max_results
+                    )
+                    st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
                     shorts_data.sort(key=lambda x: int(x['view_count']), reverse=True)
                     shorts_data = shorts_data[:max_results]
-
+                    
                     if not shorts_data:
                         st.warning("❌ 해당 채널들에서 최근 Shorts를 찾을 수 없습니다.")
                         return
-
+                    
                     df = st.session_state.data_processor.create_dataframe(shorts_data)
                     display_df = df[['thumbnail', 'title', 'channel', 'formatted_views', 'formatted_likes', 'published_at', 'video_url']].copy()
                     display_df.columns = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
@@ -470,6 +462,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
