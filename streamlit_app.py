@@ -314,6 +314,11 @@ def channel_list_page(hours, max_results):
                         shorts = st.session_state.scraper.get_shorts_from_uploads_playlist(
                             cid, hours=hours, max_results=max_results
                         )
+
+                        # 확인되면 여기 삭제
+                        print(f"{cid}에서 가져온 Shorts 수:", len(shorts))
+                        st.write(f"{cid}에서 Shorts:", shorts)
+                        
                         shorts_data.extend(shorts)
                     # 정렬 후 top-N만
                     shorts_data.sort(key=lambda x: int(x['view_count']), reverse=True)
@@ -467,6 +472,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
