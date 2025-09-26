@@ -345,7 +345,7 @@ def channel_list_page(hours, max_results):
                     display_df.columns = ['썸네일','제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
                     
                     # 🚩분석 직후 반드시 세션에 저장
-                     st.session_state['channel_shorts_display_df'] = display_df
+                    st.session_state['channel_shorts_display_df'] = display_df
 
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {str(e)}")
@@ -506,6 +506,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
