@@ -10,7 +10,7 @@ class YouTubeScraper:
         self.base_url = "https://www.googleapis.com/youtube/v3"
 
     def handle_to_channel_id(self, handle):
-        url = f"{self.baseurl}/channels"
+        url = f"{self.base_url}/channels"
         params = {
             "part": "id",
             "forHandle": handle.lstrip("@"),
@@ -267,6 +267,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
