@@ -9,7 +9,7 @@ class YouTubeScraper:
         self.api_key = st.secrets.get("YOUTUBE_API_KEY") or os.getenv("YOUTUBE_API_KEY")
         self.base_url = "https://www.googleapis.com/youtube/v3"
 
-    def handle_to_channelid(self, handle):
+    def handle_to_channel_id(self, handle):
         url = f"{self.baseurl}/channels"
         params = {
             "part": "id",
@@ -217,16 +217,16 @@ class YouTubeScraper:
         published_after = (datetime.now() - timedelta(hours=hours)).isoformat() + "Z"
         for channel_id in channel_ids:
             
-            real_channelid = None
-            if str(channelid).strip().startswith('UC'):
-                real_channelid = channelid.strip()
-            elif str(channelid).strip().startswith('@'):
-                real_channelid = self.handle_to_channelid(channelid.strip())
-                if not real_channelid:
-                    print(f"handle({channelid}) → 채널ID 변환 실패, PASS")
+            real_channel_id = None
+            if str(channel_id).strip().startswith('UC'):
+                real_channel_id = channel_id.strip()
+            elif str(channel_id).strip().startswith('@'):
+                real_channel_id = self.handle_to_channel_id(channel_id.strip())
+                if not real_channel_id:
+                    print(f"handle({channel_id}) → 채널ID 변환 실패, PASS")
                     continue    # 건너뜀
             else:
-                print(f"올바른 채널ID/핸들이 아님: {channelid}, PASS")
+                print(f"올바른 채널ID/핸들이 아님: {channel_id}, PASS")
                 continue
             
             try:
@@ -234,7 +234,7 @@ class YouTubeScraper:
                 params = {
                     'part': 'id,snippet',
                     'type': 'video',
-                    'channelId': real_channelid,
+                    'channel_id': real_channel_id,
                     'order': 'date',
                     'publishedAfter': published_after,
                     # 'videoDuration': 'short',  # 상황따라 활성화
@@ -267,6 +267,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
