@@ -313,11 +313,9 @@ def channel_list_page(hours, max_results):
                         # ▶️ 각 채널별 숏츠 불러오기 (scraper 구조에 맞춰 직접 수정 필요)
                         shorts = st.session_state.scraper.get_shorts_from_uploads_playlist(
                             cid, hours=hours, max_results=max_results
-                        )
-
-                        # 확인되면 여기 삭제
-                        print(f"{cid}에서 가져온 Shorts 수:", len(shorts))
-                        st.write(f"{cid}에서 Shorts:", shorts)
+                        )                        
+                        #확인되면 여기 삭제
+                        st.write(f"{cid} / 가져온 shorts 수: {len(shorts)}, shorts 데이터:", shorts)
                         
                         shorts_data.extend(shorts)
                     # 정렬 후 top-N만
@@ -472,6 +470,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
