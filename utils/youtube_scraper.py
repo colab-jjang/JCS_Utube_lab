@@ -14,7 +14,7 @@ class YouTubeScraper:
         params = {
             "part": "id",
             "forHandle": handle.lstrip("@"),
-            "key": self.apikey
+            "key": self.api_key
         }
         resp = requests.get(url, params=params).json()
         if "items" in resp and resp["items"]:
@@ -267,6 +267,7 @@ class YouTubeScraper:
                 continue
         all_shorts.sort(key=lambda x: int(x['view_count']), reverse=True)
         return all_shorts[:max_results]
+
 
 
 
