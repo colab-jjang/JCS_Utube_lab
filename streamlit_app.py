@@ -386,6 +386,8 @@ def channel_list_page(hours, max_results):
         st.subheader("최신 분석 결과")
 
         # ----- 정렬 옵션 UI 추가 -----
+        df['조회수'] = df['조회수'].astype(int)
+        df['좋아요'] = df['좋아요'].astype(int)
         sort_col = st.selectbox("정렬할 컬럼", list(df.columns), index=0)
         sort_order = st.radio("정렬순", ['내림차순', '오름차순'], horizontal=True)
         ascending = sort_order == '오름차순'
@@ -548,6 +550,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
