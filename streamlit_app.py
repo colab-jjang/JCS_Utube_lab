@@ -177,8 +177,10 @@ def keyword_search_page(hours, max_results):
                 shorts_data = st.session_state.scraper.get_keyword_shorts(
                     keyword, hours, max_results)
     
-                if not shorts_data:
-                    st.warning("❌ 검색 결과가 없습니다. 다른 키워드나 시간 범위를 시도해보세요.")
+                if not shorts_data or len(shorts_data) == 0:
+                    st.warning("❌ 해당 채널들에서 최근 Shorts를 찾을 수 없습니다.")
+                    # 진단 정보 추가
+                    st.info(f"분석 대상 채널 수: {len(channel_ids)}개, 분석 기간: {hours}시간")
                     return
     
                 df = st.session_state.data_processor.create_dataframe(shorts_data)
@@ -310,7 +312,7 @@ def channel_list_page(hours, max_results):
                     shorts_data = st.session_state.scraper.get_channel_shorts(
                         channel_ids, hours=hours, max_results=max_results
                     )
-                    #st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
+                    st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
                     shorts_data.sort(key=lambda x: int(x['view_count']), reverse=True)
                     shorts_data = shorts_data[:max_results]
                     
@@ -462,6 +464,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
