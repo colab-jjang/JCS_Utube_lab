@@ -206,14 +206,14 @@ def keyword_search_page(hours, max_results):
         sorted_df = display_df.sort_values(by=sort_col, ascending=ascending)
         
             # ----------- 썸네일 표시되면 나머지 삭제
-        header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+        header_cols = st.columns([2, 7, 3, 2, 2, 3, 2])
         header_names = ['썸네일', '제목', '채널명', '조회수', '좋아요', '발행일', 'LINK']
         for i, name in enumerate(header_names):
             with header_cols[i]:
                 st.markdown(f"<span style='font-size:14px; font-weight:bold'>{name}</span>", unsafe_allow_html=True)   # Markdown 굵게(bold) 적용
     
         for idx, row in sorted_df.iterrows():
-            cols = st.columns([2, 7, 4, 1, 1, 3, 2])   # 필요열만큼 배분
+            cols = st.columns([2, 7, 3, 2, 2, 3, 2])   # 필요열만큼 배분
             with cols[0]:
                 st.image(row['썸네일'], width=100)
             with cols[1]:
@@ -312,7 +312,7 @@ def channel_list_page(hours, max_results):
                     shorts_data = st.session_state.scraper.get_channel_shorts(
                         channel_ids, hours=hours, max_results=max_results
                     )
-                    st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
+                    #st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
                     shorts_data.sort(key=lambda x: int(x['view_count']), reverse=True)
                     shorts_data = shorts_data[:max_results]
                     
@@ -429,13 +429,13 @@ def display_results(df, source_name):
         ascending = sort_order == '오름차순'
         sorted_df = display_df.sort_values(by=sort_col, ascending=ascending)
 
-        header_cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+        header_cols = st.columns([2, 7, 3, 2, 2, 3, 2])
         header_names = ['썸네일','제목','채널명','조회수','좋아요','발행일','LINK']
         for i, name in enumerate(header_names):
             with header_cols[i]:
                 st.markdown(f"**{name}**")
         for idx, row in sorted_df.iterrows():
-            cols = st.columns([2, 7, 4, 1, 1, 3, 2])
+            cols = st.columns([2, 7, 3, 2, 2, 3, 2])
             with cols[0]:
                 st.image(row['썸네일'], width=100)
             with cols[1]:
@@ -464,6 +464,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
