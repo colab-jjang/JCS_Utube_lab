@@ -127,8 +127,8 @@ def main():
     # 시간 범위 설정
     st.sidebar.markdown("---")
     st.sidebar.subheader("⏰ 시간 범위")
-    time_range = st.sidebar.selectbox("분석 기간", ["12시간", "24시간"])
-    hours = 12 if time_range == "12시간" else 24
+    time_range = st.sidebar.selectbox("분석 기간", ["24시간", "48시간"])
+    hours = 24 if time_range == "24시간" else 48
 
     # 결과 개수 설정
     max_results = st.sidebar.slider("최대 결과 개수", 10, 100, 50)
@@ -310,7 +310,7 @@ def channel_list_page(hours, max_results):
                     shorts_data = st.session_state.scraper.get_channel_shorts(
                         channel_ids, hours=hours, max_results=max_results
                     )
-                    st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
+                    #st.write(f"가져온 shorts 수: {len(shorts_data)} / 데이터 샘플:", shorts_data[:2])
                     shorts_data.sort(key=lambda x: int(x['view_count']), reverse=True)
                     shorts_data = shorts_data[:max_results]
                     
@@ -462,6 +462,7 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
 
