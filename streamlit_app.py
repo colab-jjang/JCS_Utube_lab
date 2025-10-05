@@ -127,8 +127,8 @@ def main():
     # 시간 범위 설정
     st.sidebar.markdown("---")
     st.sidebar.subheader("⏰ 시간 범위")
-    time_range = st.sidebar.selectbox("분석 기간", ["12시간", "24시간"])
-    hours = 12 if time_range == "12시간" else 24
+    time_range = st.sidebar.selectbox("분석 기간", ["24시간", "48시간"])
+    hours = 48 if time_range == "48시간" else 24
 
     # 결과 개수 설정
     max_results = st.sidebar.slider("최대 결과 개수", 10, 100, 50)
@@ -513,5 +513,6 @@ def display_results(df, source_name):
 
 if __name__ == "__main__":
     main()
+
 
 
